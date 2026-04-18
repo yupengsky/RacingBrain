@@ -195,6 +195,13 @@ success condition is:
 - fusion publishes non-empty `/perception/fusion/map`;
 - SLAM publishes non-empty `/global_map`.
 
+Watch the replay in RViz and keep the processes alive after the chain is
+verified:
+
+```bash
+RVIZ=true KEEP_RUNNING=true ./scripts/run_dataset_slam_chain.sh
+```
+
 Current verified status:
 
 - `./scripts/build_ros_venv.sh --event-handlers console_direct+` finishes:

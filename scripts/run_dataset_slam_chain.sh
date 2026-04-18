@@ -11,6 +11,7 @@ STARTUP_WAIT="${STARTUP_WAIT:-12}"
 MONITOR_TIMEOUT="${MONITOR_TIMEOUT:-150}"
 TRACK="${TRACK:-acceleration}"
 RVIZ="${RVIZ:-false}"
+KEEP_RUNNING="${KEEP_RUNNING:-false}"
 
 source "${WORKSPACE_DIR}/scripts/activate_ros_ml.sh" >/tmp/drd26_activate_ros_ml.log
 set +u
@@ -60,6 +61,7 @@ echo "Workspace: ${WORKSPACE_DIR}"
 echo "Dataset: ${DATASET_DIR}"
 echo "ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}"
 echo "Bag rate: ${BAG_RATE}"
+echo "Keep running after success: ${KEEP_RUNNING}"
 echo "Logs: ${LOG_DIR}"
 
 ros2 launch run_perception system_run.launch.py >"${LOG_DIR}/perception.log" 2>&1 &
@@ -219,5 +221,11 @@ echo "--- bag tail ---"
 tail -n 40 "${LOG_DIR}/bag.log" || true
 echo
 echo "Summary: ${LOG_DIR}/summary.json"
+
+if [[ "${MONITOR_STATUS}" -eq 0 && "${KEEP_RUNNING}" == "true" ]]; then
+  echo
+  echo "Chain is verified and still running. Press Ctrl-C to stop."
+  wait "${BAG_PID}"
+fi
 
 exit "${MONITOR_STATUS}"
