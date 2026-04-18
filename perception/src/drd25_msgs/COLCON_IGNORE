@@ -1,0 +1,2 @@
+This imported drd25_msgs package conflicts with the SLAM interface package.
+Build the workspace-level slam/drd25_msgs package instead.

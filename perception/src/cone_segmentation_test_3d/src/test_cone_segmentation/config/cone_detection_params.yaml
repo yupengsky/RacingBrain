@@ -1,0 +1,56 @@
+# 锥筒检测参数配置文件
+cone_segmentation_node:
+  ros__parameters:
+    # 基础过滤参数
+    horizontal_distance_threshold: 20.0
+    voxel_size: 0.02 # 下采样体素大小
+
+    # 地面检测参数
+    ground_distance_threshold: 0.03 # 地面检测距离阈值，调小提高精度
+    ground_ransac_iterations: 100 # 地面RANSAC迭代次数
+
+    # 聚类参数
+    height_threshold: 1.3
+    dbscan_eps: 0.15 # 聚类容差，关键参数
+    dbscan_min_points: 20 # 最小聚类点数，确保有足够点进行拟合
+    min_cluster_size: 20
+    aspect_ratio_threshold: 3.0
+    planar_threshold: 0.8
+
+    # 锥形拟合参数 - 优化后的设置
+    cone_ransac_distance_threshold: 0.05 # RANSAC距离阈值，关键参数
+    cone_ransac_max_iterations: 1000 # 增加迭代次数提高成功率
+    cone_min_inlier_ratio: 0.3 # 最小内点率
+    cone_axis_max_angle: 30.0 # 轴向角度约束（度）
+    cone_min_radius: 0.05 # 最小半径（米）
+    cone_max_radius: 0.25 # 最大半径（米）
+    cone_min_opening_angle: 10.0 # 最小开口角（度）
+    cone_max_opening_angle: 30.0 # 最大开口角（度）
+
+    # 锥筒几何约束
+    MIN_CONE_HEIGHT: 0.01 # 最小锥筒高度（米）
+    MAX_CONE_HEIGHT: 2.0 # 最大锥筒高度（米）
+    MAX_DIST_TO_GROUND: 0.5 # 距离地面最大距离（米）
+    MIN_ACCEPTABLE_INLIER_RATIO: 0.3 # 最小可接受内点率
+
+# 调参建议：
+# 1. 如果检测到的锥筒太少：
+#    - 增加 cone_ransac_max_iterations (1000 -> 2000)
+#    - 增加 cone_ransac_distance_threshold (0.05 -> 0.08)
+#    - 减小 dbscan_min_points (20 -> 15)
+#    - 放宽 cone_min_opening_angle (10 -> 5)
+#    - 放宽 cone_max_opening_angle (30 -> 45)
+
+# 2. 如果检测到太多误报：
+#    - 减小 cone_ransac_distance_threshold (0.05 -> 0.03)
+#    - 增加 MIN_ACCEPTABLE_INLIER_RATIO (0.3 -> 0.5)
+#    - 减小 cone_max_radius (0.25 -> 0.2)
+#    - 严格化高度约束
+
+# 3. 如果聚类效果不好：
+#    - 调整 dbscan_eps (0.15 -> 0.1 or 0.2)
+#    - 调整 voxel_size (0.02 -> 0.015 or 0.03)
+
+# 4. 如果地面检测不准确：
+#    - 调整 ground_distance_threshold (0.03 -> 0.02 or 0.05)
+#    - 增加 ground_ransac_iterations (100 -> 200)

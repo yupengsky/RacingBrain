@@ -1,4 +1,4 @@
-# src/slam/config/autocross.yaml
+# slam/slam/config/autocross.yaml
 /**:
   ros__parameters:
     track_type: "autocross"

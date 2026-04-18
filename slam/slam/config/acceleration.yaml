@@ -1,4 +1,4 @@
-# src/slam/config/acceleration.yaml
+# slam/slam/config/acceleration.yaml
 /**:
   ros__parameters:
     track_type: "acceleration"

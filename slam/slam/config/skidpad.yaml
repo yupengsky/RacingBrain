@@ -1,4 +1,4 @@
-# src/slam/config/skidpad.yaml
+# slam/slam/config/skidpad.yaml
 /**:
   ros__parameters:
     track_type: "skidpad"
