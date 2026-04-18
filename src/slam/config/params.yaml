@@ -1,0 +1,17 @@
+# src/slam/config/params.yaml
+/**:
+  ros__parameters:
+    system:
+      gnss_topic: "/gongji_gnss_ins_64"
+      lidar_topic: "/perception/fusion/map"
+      map_frame: "map"
+      base_frame: "base_link"
+      utm_zone_epsg: "EPSG:32651" 
+
+    extrinsics:
+      t_l2v: [
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.2,
+        0.0, 0.0, 1.0, 0.5,
+        0.0, 0.0, 0.0, 1.0
+      ]   # T_lidar2imu

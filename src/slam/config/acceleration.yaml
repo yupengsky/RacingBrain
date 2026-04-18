@@ -1,0 +1,26 @@
+# src/slam/config/acceleration.yaml
+/**:
+  ros__parameters:
+    track_type: "acceleration"
+
+    mapping:
+      kf_q_base: 0.01   # 卡尔曼过程噪声，即Q值，用于动态更新锥桶坐标
+      kf_p_init: 1.0   # 初始地图不确定度，用于新锥桶初始化
+      mahalanobis_thresh: 2.5  # 马氏距离阈值，用于锥桶匹配
+      max_match_dist: 1.0  # 欧式距离阈值，用于马氏距离匹配前的粗筛
+      max_lidar_range: 30.0   # 最大感知距离，用于基于距离计算置信度
+      lidar_blind_range: 1.0  # 由于雷达线束高度打不到近处地面，引起呈扇形的雷达视野死角的半径
+      fov_angle: 120.0   # 雷达视场角，用于计算锥桶是否在视野范围内
+      distance_factor: 8.0  # 协方差矩阵随距离而衰减的分母，用于噪声建模
+      sigma_long: 0.4   # 纵向噪声
+      sigma_lat: 0.2  # 横向噪声
+      # 基于贝叶斯对数滤波(Log-Odds)的计算公式: L_new = L_old + ln(p/1-p)
+      l_hit: 0.85   # 对应70%的存在概率
+      l_miss: -0.4  # 对应约38%的存在概率
+      l_min: -2.2   # 对应10%的存在概率
+      l_max: 3.5    # 对应97%的存在概率
+      l_stable: 1.4 # 对应80%的存在概率，系统判定为稳定锥桶，选择发布
+      lat_factor: 0.5     # 过弯时的横向误差惩罚
+      half_tube_width: 3.0  # ROI管道的一半宽度
+      max_tube_length: 10.0 # ROI管道长度的最大值
+      max_straight_angular: 0.1   # 直线行驶时可能的最大角速度
