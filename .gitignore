@@ -6,6 +6,9 @@
 # Local tool state
 /.codex
 /.codex/
+/.venv_ros_ml/
+/.bootstrap_tools/
+/.ros_deps/
 
 # Python cache and test artifacts
 __pycache__/

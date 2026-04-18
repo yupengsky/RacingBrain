@@ -11,6 +11,9 @@ detections, then maintains and visualizes a stable global cone map.
 - `slam/drd25_msgs`: custom message definitions used by perception, planning, and
   mapping interfaces.
 - `slam/slam`: C++ ROS 2 node package that builds `slam_node`.
+- `gnss/gnss_ins_msg`: GNSS/INS custom messages used by SLAM and rosbag replay.
+- `gnss/cpp_pubsub`: optional serial GNSS/INS bridge that publishes live
+  `/gongji_gnss_ins_64`, `/imu`, and `/body_velocity` topics from `/dev/ttyUSB0`.
 - `perception/src/cone_ws/src/cone_interfaces`: camera cone detection messages.
 - `perception/src/cone_ws/src/cone_detector`: YOLOv8 camera cone detector.
 - `perception/src/cone_segmentation_test_3d/src/test_cone_segmentation`: LiDAR
@@ -42,10 +45,11 @@ detections, then maintains and visualizes a stable global cone map.
 
 ## Important Limits
 
-- The repository currently lacks the external `gnss_ins_msg` package needed by
-  `slam`.
-- Full perception build currently also needs CSF, `vision_msgs`, and Python YOLO
-  runtime packages.
+- `vision_msgs` and CSF are workspace-local dependencies under `.ros_deps/`.
+  Use `source scripts/activate_ros_ml.sh` before building or running so those
+  prefixes are visible.
+- A dedicated ROS-compatible ML venv is now prepared at `./.venv_ros_ml`; Python
+  YOLO runtime packages are no longer a blocker.
 - No rosbag or offline end-to-end dataset is included. The imported perception
-  code includes training/data scripts and local model artifacts, but large
-  datasets and model weights are intentionally treated as local assets.
+  code includes training/data scripts, and this workspace is configured to use
+  external model/data paths from `config/hardcoded_paths.ini`.

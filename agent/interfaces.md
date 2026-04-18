@@ -9,6 +9,13 @@ Default topic names are defined in `slam/slam/config/params.yaml`.
 - `/perception/fusion/map`: perception cone map input, type
   `drd25_msgs/msg/Map`.
 
+Recorded topics confirmed in the local rosbag dataset:
+
+- `/gongji_gnss_ins_64`: `gnss_ins_msg/msg/Gnssins64`
+- `/gongji_gnss_ins`: `gnss_ins_msg/msg/Gnssins`
+- `/camera1/image_raw`: `sensor_msgs/msg/Image`
+- `/lidar_points`: `sensor_msgs/msg/PointCloud2`
+
 ## Output Topics
 
 - `/global_map`: `visualization_msgs/msg/MarkerArray`, stable global cones.
@@ -18,7 +25,8 @@ Default topic names are defined in `slam/slam/config/params.yaml`.
 
 ## `gnss_ins_msg` Fields Used By Code
 
-The code includes `gnss_ins_msg/msg/gnssins64.hpp` and uses
+The message package is available at `gnss/gnss_ins_msg`. The code includes
+`gnss_ins_msg/msg/gnssins64.hpp` and uses
 `gnss_ins_msg::msg::Gnssins64`. The current `slam_node.cpp` reads these fields:
 
 - `header`
@@ -45,8 +53,8 @@ float64 vel_n
 float64 imu_gyro_z
 ```
 
-Prefer the real project/team `gnss_ins_msg` package for real data or rosbag
-compatibility.
+The current `gnss/gnss_ins_msg/msg/Gnssins64.msg` includes these fields and
+matches the type recorded in the local rosbag.
 
 ## Perception Message Shape
 

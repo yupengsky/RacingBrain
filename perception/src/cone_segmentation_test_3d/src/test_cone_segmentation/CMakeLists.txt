@@ -42,13 +42,36 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   DEPENDENCIES geometry_msgs std_msgs
 )
 
-# CSF 库路径 (保持你原有的逻辑)
-# include_directories(/path/to/CSF/include)
-# link_directories(/path/to/CSF/lib)
+set(CSF_ROOT "" CACHE PATH "CSF install root containing include/CSF.h and lib/libCSF.*")
+if(NOT CSF_ROOT AND DEFINED ENV{CSF_ROOT})
+  set(CSF_ROOT "$ENV{CSF_ROOT}")
+endif()
+
+find_path(CSF_INCLUDE_DIR
+  NAMES CSF.h
+  HINTS
+    "${CSF_ROOT}/include"
+    "${CMAKE_SOURCE_DIR}/.ros_deps/csf/include"
+)
+
+find_library(CSF_LIBRARY
+  NAMES CSF
+  HINTS
+    "${CSF_ROOT}/lib"
+    "${CMAKE_SOURCE_DIR}/.ros_deps/csf/lib"
+)
+
+if(NOT CSF_INCLUDE_DIR OR NOT CSF_LIBRARY)
+  message(FATAL_ERROR "CSF not found. Set CSF_ROOT to a CSF install prefix, e.g. .ros_deps/csf")
+endif()
+
+message(STATUS "CSF include: ${CSF_INCLUDE_DIR}")
+message(STATUS "CSF library: ${CSF_LIBRARY}")
 
 include_directories(
   include
   ${PCL_INCLUDE_DIRS}
+  ${CSF_INCLUDE_DIR}
 )
 
 # ==========================================
@@ -73,7 +96,7 @@ ament_target_dependencies(cone_segmentation_node
 
 target_link_libraries(cone_segmentation_node
   ${PCL_LIBRARIES}
-  CSF
+  ${CSF_LIBRARY}
   OpenMP::OpenMP_CXX
 )
 

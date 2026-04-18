@@ -27,13 +27,15 @@ Use the workspace `slam/drd25_msgs` package as the single source of truth for
 `drd25_msgs`. The imported `perception/src/drd25_msgs` has a conflicting
 `Cone.msg` color enum and is disabled with `COLCON_IGNORE`.
 
-## Current Gaps Before Full Run
+## Runtime Notes
 
-- `gnss_ins_msg` is still required by the SLAM package.
-- `ros-humble-vision-msgs` is missing in the current system.
-- CSF is missing, so `test_cone_segmentation` fails at `#include <CSF.h>`.
-- System Python has `numpy`, `cv2`, and `rclpy`, but not `ultralytics`, `torch`,
-  or `torchvision`.
+- `vision_msgs` is installed locally from the official ROS apt package under
+  `.ros_deps/opt/ros/humble`.
+- CSF is installed locally from the official CSF repository under
+  `.ros_deps/csf`.
+- `gnss_ins_msg` is provided by the workspace under `gnss/gnss_ins_msg`.
+- The ML Python runtime lives in `.venv_ros_ml`; use
+  `source scripts/activate_ros_ml.sh`.
 - The default rosbag dataset is outside the repository at
   `/media/yupeng/新加卷/Datasets/rosbag2_2026_02_05-11_01_07`.
 - Model weights are outside the repository under
