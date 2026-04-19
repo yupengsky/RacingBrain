@@ -1,113 +1,137 @@
-# DRd26_SLAM 极度详细技术报告
+# DRd26_SLAM 技术报告
 
-本文档集面向“接手工程、理解工程、复现工程核心功能、用于技术汇报”四个目标编写。
+这份报告只保留主干内容。
 
-本报告不是泛泛介绍 ROS 2 或 SLAM，而是严格按当前仓库代码实现展开。阅读顺序从传感器数据进入系统开始，一直讲到 SLAM 节点发布全局稳定锥桶地图为止。一个已经会 Python、C++ 和 ROS 2 基础的人，按这些章节可以复现工程 80% 以上功能，并完整复现核心链路。
+目标很直接。你读完这几份文档后，要能回答下面四个问题：
 
-## 当前工程一句话定义
+1. 这个工程的数据从哪里来。
+2. 这些数据怎么一步一步变成锥桶观测。
+3. SLAM 节点怎么把锥桶观测变成全局锥桶地图。
+4. 如果换成你自己的 Python 或 C++ 工程，核心功能该怎么重写。
 
-`DRd26_SLAM` 是一个 ROS 2 Humble 工作空间，用于无人方程式赛车锥桶赛道的多传感器语义建图。它使用：
+这套系统的主链路很清楚：
 
-- 相机 YOLOv8 检测锥桶二维框和颜色。
-- LiDAR 点云分割检测锥桶三维几何位置。
-- LiDAR-Camera 融合节点把相机颜色赋给 LiDAR 空间位置。
-- GNSS/INS 提供车辆全局位姿。
-- SLAM 后端维护全局锥桶地图，并发布稳定锥桶 Marker。
+`GNSS/INS串口数据 -> GNSS话题`
 
-它不是传统纯视觉 SLAM 或纯 LiDAR SLAM。当前实现更准确地说是：
+`相机图像 -> YOLO 2D锥桶框`
 
-> GNSS/INS 位姿驱动的语义锥桶全局建图系统。
+`LiDAR点云 -> 3D锥桶候选`
 
-## 建议阅读路线
+`2D/3D融合 -> 带颜色的局部锥桶观测`
 
-如果你要快速用于汇报：
+`GNSS位姿 + 局部锥桶观测 -> 全局锥桶地图`
 
-1. 读 `01_系统总览/01_系统目标与总体架构.md`
-2. 读 `02_接口与数据流/01_ROS话题与消息接口.md`
-3. 读 `05_融合层/01_LiDAR_Camera融合节点.md`
-4. 读 `06_SLAM核心/03_锥桶观测入图与数据关联.md`
-5. 读 `06_SLAM核心/04_地图维护发布与赛道模式.md`
-6. 读 `10_工程评估/01_亮点问题与改进路线.md`
+## 阅读顺序
 
-如果你要复现核心功能：
+1. `01_工程总览与代码入口.md`
+2. `02_从传感器到融合输出.md`
+3. `03_SLAM建图与全局锥桶地图.md`
+4. `04_复现路线与关键公式.md`
 
-1. 读 `03_传感器输入/01_GNSS_INS数据接入.md`
-2. 读 `04_感知层/01_相机YOLO锥桶检测.md`
-3. 读 `04_感知层/02_LiDAR点云锥桶分割.md`
-4. 读 `05_融合层/02_投影匹配与补漏数学.md`
-5. 读 `06_SLAM核心/01_SLAM节点生命周期与参数.md`
-6. 读 `06_SLAM核心/02_GNSS位姿与坐标转换.md`
-7. 读 `06_SLAM核心/03_锥桶观测入图与数据关联.md`
-8. 读 `09_复现指南/01_核心功能复现路线图.md`
+## 你先记住这几个结论
 
-如果你要讲算法细节：
+### 1. 地图的基本单元是锥桶
 
-1. 读 `08_术语专题/01_马氏距离.md`
-2. 读 `08_术语专题/02_卡尔曼更新与协方差.md`
-3. 读 `08_术语专题/03_各向异性观测噪声.md`
-4. 读 `08_术语专题/04_PROJ与UTM坐标.md`
-5. 读 `08_术语专题/05_ROS2时间同步与QoS.md`
+这个工程最后维护的是锥桶对象。
 
-## 报告目录说明
+它维护的是 `GlobalCone`。每个锥桶有：
 
-- `00_阅读入口`：如何看这份报告，如何把它变成 PPT。
-- `01_系统总览`：系统目标、包结构、端到端链路。
-- `02_接口与数据流`：话题、消息、坐标系、时间同步。
-- `03_传感器输入`：GNSS/INS、相机、LiDAR 原始数据如何进入系统。
-- `04_感知层`：YOLO 检测和点云锥桶分割。
-- `05_融合层`：LiDAR-Camera 融合实现。
-- `06_SLAM核心`：核心 SLAM 后端实现。
-- `07_运行构建与验证`：环境、构建、一键运行、端到端验证。
-- `08_术语专题`：工程中关键算法概念。
-- `09_复现指南`：如何从零复现核心链路。
-- `10_工程评估`：亮点、风险、改进路线。
+- 全局二维坐标 `pos`
+- 协方差 `P`
+- 颜色和类型
+- 存在分数 `existence_score`
+- 是否稳定 `is_stable`
 
-## 本报告基于的主要源码
+定义在：
 
-核心源码路径：
+- `slam/slam/include/slam/loop_closure_detector.hpp`
+
+更新逻辑在：
 
 - `slam/slam/src/slam_node.cpp`
-- `slam/slam/src/loop_closure_detector.cpp`
-- `slam/slam/include/slam/loop_closure_detector.hpp`
-- `slam/slam/config/*.yaml`
-- `slam/drd25_msgs/msg/*.msg`
-- `gnss/gnss_ins_msg/msg/*.msg`
-- `gnss/cpp_pubsub/src/publisher_member_function.cpp`
-- `perception/src/cone_ws/src/cone_detector/cone_detector/yolo_detector.py`
-- `perception/src/cone_segmentation_test_3d/src/test_cone_segmentation/src/test_cone_segmentation.cpp`
-- `perception/src/fs_fusion_box/src/fs_fusion_box_node.cpp`
-- `perception/src/fs_fusion_box/src/fs_fusion_box_math.cpp`
-- `perception/src/run_perception/launch/system_run.launch.py`
-- `scripts/run_dataset_slam_chain.sh`
 
-## 最短演示命令
+### 2. GNSS 负责全局位姿
 
-```bash
-cd /home/yupeng/GitHub/DRd26_SLAM
-RVIZ=true KEEP_RUNNING=true ./scripts/run_dataset_slam_chain.sh
-```
+GNSS/INS 给车的绝对位置和姿态。
 
-这条命令会：
+SLAM 没有做图优化，也没有做激光里程计。它直接用 GNSS/INS 的位姿，把局部锥桶观测投到全局坐标里。
 
-1. 激活 ROS + ML 虚拟环境。
-2. source 当前工作空间。
-3. 启动感知链路。
-4. 启动 SLAM。
-5. 回放配置文件里的 rosbag。
-6. 监听关键话题。
-7. 检查 `/perception/fusion/map` 和 `/global_map` 是否非空。
-8. 将结果写入 `log/runtime/.../summary.json`。
+所以这套系统更像：
 
-## 工程复现的最核心闭环
+`GNSS约束下的锥桶地图滤波器`
 
-只要复现下面这个闭环，就复现了工程 100% 核心功能：
+### 3. 融合节点只做局部观测整理
 
-```text
-/camera1/image_raw        -> YOLO              -> /yolo/cones
-/lidar_points             -> 点云分割           -> /cone_detection_custom
-/yolo/cones + /cone_detection_custom
-                           -> 融合              -> /perception/fusion/map
-/gongji_gnss_ins_64 + /perception/fusion/map
-                           -> SLAM 后端         -> /global_map
-```
+融合层不输出全局地图。
 
+它做三件事：
+
+1. 用外参把 LiDAR 3D 框投到图像。
+2. 用 IoU 把 3D 框和 YOLO 2D 框配上。
+3. 产出一帧局部坐标下的带颜色锥桶列表。
+
+输出消息是：
+
+- `/perception/fusion/map`
+- 消息类型 `drd25_msgs/msg/Map`
+
+### 4. 全局地图靠“匹配 + 卡尔曼更新 + 生存分数”长出来
+
+核心函数是：
+
+- `SlamProcessor::updateMap`
+
+核心动作是：
+
+1. 把当前锥桶观测变成全局坐标。
+2. 用欧氏距离粗筛。
+3. 用马氏距离找旧锥桶。
+4. 匹配成功就做卡尔曼更新。
+5. 没匹配上就新建锥桶。
+6. 每帧再做一次 miss 惩罚和稳定性判定。
+7. 只发布稳定锥桶。
+
+## 仓库里最重要的文件
+
+| 作用 | 文件 |
+| --- | --- |
+| GNSS 串口读取与发布 | `gnss/cpp_pubsub/src/publisher_member_function.cpp` |
+| GNSS 消息定义 | `gnss/gnss_ins_msg/msg/Gnssins64.msg` |
+| YOLO 检测节点 | `perception/src/cone_ws/src/cone_detector/cone_detector/yolo_detector.py` |
+| YOLO 2D 检测消息 | `perception/src/cone_ws/src/cone_interfaces/msg/Cone.msg` |
+| YOLO 2D 检测数组 | `perception/src/cone_ws/src/cone_interfaces/msg/ConeArray.msg` |
+| LiDAR 锥桶分割节点 | `perception/src/cone_segmentation_test_3d/src/test_cone_segmentation/src/test_cone_segmentation.cpp` |
+| LiDAR 3D 锥桶消息 | `perception/src/cone_segmentation_test_3d/src/test_cone_segmentation/msg/ThreeDCone.msg` |
+| 融合节点 | `perception/src/fs_fusion_box/src/fs_fusion_box_node.cpp` |
+| 融合数学函数 | `perception/src/fs_fusion_box/src/fs_fusion_box_math.cpp` |
+| 融合标定参数 | `perception/src/fs_fusion_box/config/calibration.yaml` |
+| SLAM 主节点 | `slam/slam/src/slam_node.cpp` |
+| 回环检测器 | `slam/slam/src/loop_closure_detector.cpp` |
+| 锥桶地图消息 | `slam/drd25_msgs/msg/Map.msg` |
+| 一键运行脚本 | `scripts/run_dataset_slam_chain.sh` |
+
+## 建议的源码阅读顺序
+
+如果你第一次读这个仓库，直接按下面顺序看：
+
+1. `scripts/run_dataset_slam_chain.sh`
+2. `perception/src/run_perception/launch/system_run.launch.py`
+3. `perception/src/fs_fusion_box/launch/fusion_box.launch.py`
+4. `perception/src/cone_ws/src/cone_detector/cone_detector/yolo_detector.py`
+5. `perception/src/cone_segmentation_test_3d/src/test_cone_segmentation/src/test_cone_segmentation.cpp`
+6. `perception/src/fs_fusion_box/src/fs_fusion_box_node.cpp`
+7. `perception/src/fs_fusion_box/src/fs_fusion_box_math.cpp`
+8. `slam/slam/src/slam_node.cpp`
+9. `slam/slam/src/loop_closure_detector.cpp`
+
+这个顺序和运行链一致。你会更容易把整个系统接起来。
+
+## 这份报告怎么压缩了
+
+旧版报告把每个话题都拆成了很多小节。信息很全，但阅读成本高。
+
+现在改成 4 份主文档。每份文档都直接贴着代码讲。能引用代码的地方，我就直接给文件和函数。这样更适合消化工程，也更适合做汇报。
+
+## 一句话总结工程
+
+这是一套基于 ROS2 的锥桶感知与地图系统。它用相机和 LiDAR 先做局部锥桶观测，再用 GNSS/INS 把观测投到全局坐标里，最后靠数据关联、卡尔曼更新、存在分数和回环锁图，得到一张稳定的全局锥桶地图。
