@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>cone_interfaces</name>
+  <version>0.0.0</version>
+  <description>TODO: Camera cone detection messages.</description>
+  <maintainer email="todo@example.com">TODO</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- TODO: 打开消息生成依赖 -->
+</package>

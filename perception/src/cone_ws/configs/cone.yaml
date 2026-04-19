@@ -1,0 +1,9 @@
+# TODO: 单数据集训练配置。
+# 建议内容：
+# path: /abs/path/to/dataset
+# train: images/train
+# val: images/val
+# names:
+#   0: blue_cone
+#   1: yellow_cone
+#   2: orange_cone

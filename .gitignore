@@ -33,10 +33,13 @@ compile_commands.json
 *.bag.active
 *.db3
 *.mcap
+*.pcd
+*.ply
 /bags/
 /data/
 /datasets/
 /recordings/
+/outputs/
 
 # Imported perception workspace noise and large local assets
 /perception/src/cone_ws/.git/

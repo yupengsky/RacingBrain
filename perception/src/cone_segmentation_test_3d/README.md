@@ -1,2 +1,12 @@
-Bash
-ros2 run test_cone_segmentation cone_segmentation_node --ros-args -p use_csf:=false
+# cone_segmentation_test_3d
+
+这个模块负责“从 LiDAR 点云到 3D 锥桶”的部分。
+
+建议逐步实现：
+
+1. 点云预处理：地面分离、ROI 裁剪、下采样
+2. 聚类 / 几何规则筛选
+3. 锥桶姿态与中心估计
+4. 输出 3D 锥桶数组
+
+先让它在离线 bag 上稳定输出，再考虑实时性优化。

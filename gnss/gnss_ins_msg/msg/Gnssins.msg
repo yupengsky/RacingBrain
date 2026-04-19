@@ -1,30 +1,7 @@
-std_msgs/Header header
-
-float32 latitude
-float32 longitude
-float32 height
-float32 vel_e
-float32 vel_n
-float32 vel_u
-float32 pitch
-float32 roll
-float32 yaw
-uint8   ins_status
-uint16  gnss_week
-uint32  gnss_second
-uint8   gnss_status
-uint8   satellite_main
-uint8   satellite_sub
-float32 imu_acc_x
-float32 imu_acc_y
-float32 imu_acc_z
-float32 imu_gyro_x
-float32 imu_gyro_y
-float32 imu_gyro_z
-float32 imu_temp
-float32 accuracy_horizon
-float32 accuracy_height
-float32 accuracy_horizon_velocity
-float32 accuracy_vertical_velocity
-float32 accuracy_horizon_posture
-float32 accuracy_yaw
+# TODO: 定义原始 GNSS / INS 数据消息。
+# 建议至少考虑：
+# - std_msgs/Header header
+# - 经纬度 / 高度
+# - 速度、加速度、角速度
+# - 姿态角
+# - 原始状态位 / 定位质量

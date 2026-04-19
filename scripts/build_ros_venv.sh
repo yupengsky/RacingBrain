@@ -1,15 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-VENV_DIR="${VENV_DIR:-${WORKSPACE_DIR}/.venv_ros_ml}"
+# TODO: 在这里实现“绑定虚拟环境解释器”的构建入口。
+# 你可以选择：
+# - 直接调用 build_ros_clean.sh
+# - 或者先检查 .venv_ros_ml 是否存在，再做额外环境注入
 
-if [[ "${VENV_DIR}" != /* ]]; then
-  VENV_DIR="${WORKSPACE_DIR}/${VENV_DIR}"
-fi
-
-export ROS_VENV_DIR="${VENV_DIR}"
-export ROS_PYTHON_EXECUTABLE="${VENV_DIR}/bin/python3"
-
-exec "${WORKSPACE_DIR}/scripts/build_ros_clean.sh" "$@"
+echo "[TODO] build_ros_venv.sh"
+echo "在这里实现基于 .venv_ros_ml 的 colcon 构建入口。"

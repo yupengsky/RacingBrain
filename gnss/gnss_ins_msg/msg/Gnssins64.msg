@@ -1,30 +1,13 @@
-std_msgs/Header header
-
-float64 latitude   # 改为双精度
-float64 longitude  # 改为双精度
-float64 height     # 改为双精度
-float32 vel_e
-float32 vel_n
-float32 vel_u
-float32 pitch
-float32 roll
-float32 yaw
-uint8   ins_status
-uint16  gnss_week
-uint32  gnss_second
-uint8   gnss_status
-uint8   satellite_main
-uint8   satellite_sub
-float32 imu_acc_x
-float32 imu_acc_y
-float32 imu_acc_z
-float32 imu_gyro_x
-float32 imu_gyro_y
-float32 imu_gyro_z
-float32 imu_temp
-float32 accuracy_horizon
-float32 accuracy_height
-float32 accuracy_horizon_velocity
-float32 accuracy_vertical_velocity
-float32 accuracy_horizon_posture
-float32 accuracy_yaw
+# TODO: 定义供 SLAM 使用的高精度 GNSS / INS 消息。
+# 建议至少覆盖当前链路需要的字段：
+# - std_msgs/Header header
+# - float64 latitude
+# - float64 longitude
+# - float64 altitude
+# - float64 roll
+# - float64 pitch
+# - float64 yaw
+# - float64 vel_e
+# - float64 vel_n
+# - float64 imu_gyro_z
+# - 可选：定位状态 / RTK 状态 / 协方差

@@ -1,0 +1,7 @@
+# TODO: 在这里列出训练 / 推理依赖。
+# 示例：
+# ultralytics
+# opencv-python
+# numpy
+# pyyaml
+# matplotlib

@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>cone_detector</name>
+  <version>0.0.0</version>
+  <description>TODO: ROS 2 camera cone detector package.</description>
+  <maintainer email="todo@example.com">TODO</maintainer>
+  <license>TODO</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <!-- TODO: 根据实现补充 sensor_msgs、cv_bridge、cone_interfaces 等依赖 -->
+</package>

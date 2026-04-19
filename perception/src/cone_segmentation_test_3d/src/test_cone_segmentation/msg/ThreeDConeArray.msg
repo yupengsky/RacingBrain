@@ -1,2 +1,4 @@
-std_msgs/Header header       # Header containing timestamp and frame_id
-ThreeDCone[] cones           # Array of 3D cones
+# TODO: 定义 3D 锥桶数组消息。
+# 可选字段：
+# - std_msgs/Header header
+# - ThreeDCone[] cones

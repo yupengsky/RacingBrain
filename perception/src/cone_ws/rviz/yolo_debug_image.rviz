@@ -1,0 +1,5 @@
+# TODO: 在这里保存 YOLO 调试图像相关的 RViz 配置。
+# 建议固定：
+# - 图像话题
+# - debug overlay
+# - 参考 TF
