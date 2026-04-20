@@ -4,6 +4,7 @@
 #include <mutex>
 #include <atomic>
 #include <algorithm>
+#include <cmath>
 #include <Eigen/Dense>
 #include <proj.h>
 #include "rclcpp/rclcpp.hpp"   
@@ -92,6 +93,16 @@ public:
     }
 
 private:
+    struct VehiclePoseEstimate {
+        double tx = 0.0;
+        double ty = 0.0;
+        double tz = 0.0;
+        double vel_e = 0.0;
+        double vel_n = 0.0;
+        Eigen::Matrix3d R_vehicle = Eigen::Matrix3d::Identity();
+        Eigen::Matrix4d T_veh_to_map = Eigen::Matrix4d::Identity();
+    };
+
     // 定义系统参数（基本不会变的参数）
     struct SystemParams {
         std::string gnss_topic;
@@ -240,44 +251,19 @@ private:
     void fastGnssCallback(const gnss_ins_msg::msg::Gnssins64::SharedPtr gnss_msg) {
         if (!P_) return;
 
-        //  *********************** 位姿提取和计算 ***********************
-        PJ_COORD input_coord = proj_coord(gnss_msg->latitude, gnss_msg->longitude, 0, 0);
-        PJ_COORD output_coord = proj_trans(P_, PJ_FWD, input_coord);
-        double utm_e = output_coord.xy.x;
-        double utm_n = output_coord.xy.y;
+        double utm_e = 0.0;
+        double utm_n = 0.0;
+        projectToUtm(*gnss_msg, utm_e, utm_n);
+        if (!ensureOriginInitialized(utm_e, utm_n)) return;
 
-        // 初始化原点
-        if (!is_origin_set_) {
-            origin_e_ = utm_e;
-            origin_n_ = utm_n;
-            is_origin_set_ = true;
-            RCLCPP_INFO(this->get_logger(), "Origin set at E:%.2f, N:%.2f", origin_e_, origin_n_);
-            return;
-        }
-
-        double tx = utm_e - origin_e_;
-        double ty = utm_n - origin_n_;
-        double tz = 0.0; 
-
-        Eigen::AngleAxisd roll(gnss_msg->roll * M_PI/180.0, Eigen::Vector3d::UnitX());
-        Eigen::AngleAxisd pitch(gnss_msg->pitch * M_PI/180.0, Eigen::Vector3d::UnitY());
-        Eigen::AngleAxisd yaw(gnss_msg->yaw * M_PI/180.0, Eigen::Vector3d::UnitZ());
-        Eigen::Matrix3d R_imu = (yaw * pitch * roll).toRotationMatrix();
-        
-        Eigen::Matrix3d R_fix;
-        R_fix << 0, -1, 0, 
-                 1, 0, 0,  
-                 0, 0, 1;
-        Eigen::Matrix3d R_vehicle = R_imu * R_fix;
+        VehiclePoseEstimate pose = buildVehiclePoseEstimate(*gnss_msg, utm_e, utm_n);
 
         // T_veh_to_map_ 实时更新的最新的车辆位姿
         // T_veh_to_map_ 是独属于高频发布轨迹回调函数的，不参与建图
-        T_veh_to_map_ = Eigen::Matrix4d::Identity();
-        T_veh_to_map_.block<3,3>(0,0) = R_vehicle;
-        T_veh_to_map_.block<3,1>(0,3) = Eigen::Vector3d(tx, ty, tz);
+        T_veh_to_map_ = pose.T_veh_to_map;
 
         // 立即发布 TF 和 Odom
-        publishTfAndOdom(gnss_msg->header, tx, ty, tz, R_vehicle, gnss_msg->vel_e, gnss_msg->vel_n);
+        publishTfAndOdom(gnss_msg->header, pose.tx, pose.ty, pose.tz, pose.R_vehicle, pose.vel_e, pose.vel_n);
     }
 
     // 同步回调函数，确保感知与位姿信息处于同一时间戳下，负责地图更新
@@ -285,52 +271,12 @@ private:
     {
         if (!P_ || !is_origin_set_) return;
 
-        // 处理 GNSS/INS 位姿 
-        // 使用 PROJ 进行坐标转换
-        PJ_COORD input_coord = proj_coord(gnss_msg->latitude, gnss_msg->longitude, 0, 0);
-        PJ_COORD output_coord = proj_trans(P_, PJ_FWD, input_coord);
+        double utm_e = 0.0;
+        double utm_n = 0.0;
+        projectToUtm(*gnss_msg, utm_e, utm_n);
+        maybeInitializeLoopDetector();
+        VehiclePoseEstimate pose = buildVehiclePoseEstimate(*gnss_msg, utm_e, utm_n);
 
-        // 转换出来的是enu坐标系下的x/y
-        double utm_e = output_coord.xy.x; // 东向坐标 (Easting)
-        double utm_n = output_coord.xy.y; // 北向坐标 (Northing)
-        // 回环检测器初始化
-        if (!is_lcd_initialized_){
-            loop_detector_.setOrigin(Eigen::Vector3d(0.0, 0.0, 0.0));
-            is_lcd_initialized_ = true;   
-            RCLCPP_INFO(this->get_logger(), "Loop Closure Detector Initialized");
-        }
-        // 计算车辆相对原点坐标
-        double tx = utm_e - origin_e_;
-        double ty = utm_n - origin_n_;
-        double tz = 0.0; 
-
-        // 旋转部分 (ZYX 顺序)
-        // imu坐标系是x-右， y-前；以北向(y轴)正方向为航向角0度，逆时针为正，x轴指向东向
-        // Eigen/ROS是x-前， y-左；以东向(x轴)正方向为航向角0度，逆时针为正
-        // 二者虽然在坐标系的定义和航向角的定义都不同，但是两个不同却成就了相同的坐标系(x都指东,y都指北)
-        Eigen::AngleAxisd roll(gnss_msg->roll * M_PI/180.0, Eigen::Vector3d::UnitX());
-        Eigen::AngleAxisd pitch(gnss_msg->pitch * M_PI/180.0, Eigen::Vector3d::UnitY());
-        Eigen::AngleAxisd yaw(gnss_msg->yaw * M_PI/180.0, Eigen::Vector3d::UnitZ());
-        Eigen::Matrix3d R_imu = (yaw * pitch * roll).toRotationMatrix();
-
-        // 现在得到的旋转矩阵R_imu是imu坐标系的，我们最后还要让其变成x-前， y-左的ROS坐标系
-        // imu——>vehicle的修正矩阵,x向右转换成x向前
-        // R_fix:
-        // [ cos90  -sin90   0 ]   [ 0  -1   0 ]
-        // [ sin90   cos90   0 ] = [ 1   0   0 ]
-        // [   0       0     1 ]   [ 0   0   1 ]
-        // R_vehicle = R_imu * R_fix
-        Eigen::Matrix3d R_fix;
-        R_fix << 0, -1, 0,
-                 1, 0, 0,
-                 0, 0, 1;
-        Eigen::Matrix3d R_vehicle = R_imu * R_fix;
-
-        // historcial_T_veh_to_map 
-        // 并不是当前时刻的位姿，但是与感知消息时间戳对齐的历史位姿
-        Eigen::Matrix4d historical_T_veh_to_map = Eigen::Matrix4d::Identity();
-        historical_T_veh_to_map.block<3,3>(0,0) = R_vehicle;
-        historical_T_veh_to_map.block<3,1>(0,3) = Eigen::Vector3d(tx, ty, tz);
         // 获取实时对地速度和z轴角速度（并未和ROS坐标系对齐）
         current_speed_ = caculateSpeed(gnss_msg);
         current_gyro_z_ = caculateYawRate(gnss_msg);
@@ -341,20 +287,18 @@ private:
         std::lock_guard<std::mutex> lock(map_mutex_);
 
         // 每一帧建图开始前，先把所有锥桶标记为未匹配
-        for (auto &cone : cone_map_) {
-            cone.matched_this_frame = false;
-        }
+        resetFrameMatches();
 
         // 根据不同赛道，调用不同的建图策略
         switch (current_track_type_) {
             case TrackType::ACCELERATION:
-                processAccelerationTrack(map_msg, historical_T_veh_to_map);
+                processAccelerationTrack(*map_msg, pose.T_veh_to_map);
                 break;
             case TrackType::AUTOCROSS:
-                processAutocrossTrack(map_msg, historical_T_veh_to_map, gnss_msg->header.stamp, tx, ty, tz, R_vehicle);
+                processAutocrossTrack(*map_msg, pose.T_veh_to_map, gnss_msg->header.stamp, pose.tx, pose.ty, pose.tz);
                 break;
             case TrackType::SKIDPAD:
-                processSkidpadTrack(map_msg, historical_T_veh_to_map, gnss_msg->header.stamp, tx, ty, tz, R_vehicle);
+                processSkidpadTrack(*map_msg, pose.T_veh_to_map, gnss_msg->header.stamp, pose.tx, pose.ty, pose.tz);
                 break;
         }
     // *********************** 建图 **********************
@@ -364,154 +308,35 @@ private:
     }
 
     // 直线赛道建图策略
-    void processAccelerationTrack(const drd25_msgs::msg::Map::ConstSharedPtr& map_msg, 
+    void processAccelerationTrack(const drd25_msgs::msg::Map& map_msg, 
                                   const Eigen::Matrix4d& historical_T_veh_to_map) 
     {
-            // *********** 前端观测数据处理 ***********
-        for (const auto &cone_obs : map_msg->track) {
-
-            // UNKNOWN类型不参与建图
-            if (cone_obs.color == drd25_msgs::msg::Cone::UNKNOWN)
-                continue;
-            
-            // 坐标转换，这里的 (x,y) 为雷达坐标系下
-            Eigen::Vector4d p_lidar(cone_obs.x, cone_obs.y, 0.0, 1.0);
-            // 转换公式：Global = T_Vehicle2Map * T_Lidar2Vehicle * Point_Lidar
-            Eigen::Vector4d p_global = historical_T_veh_to_map * T_l2v_ * p_lidar;
-            // 确定锥桶颜色
-            float r = 0.0f, g = 0.0f, b = 0.0f;
-            parseConeColor(cone_obs.color, r, g, b);
-            // *********** 前端观测数据处理 ***********
-
-            // *********** 地图更新 ***********
-            // 基于相机距离给定置信度，离相机越近的观测越可信
-            double dist = std::sqrt(cone_obs.x * cone_obs.x + cone_obs.y * cone_obs.y);
-            // 提取车辆在地图中的 2D 旋转矩阵 (用于旋转噪声)
-            Eigen::Matrix2d R_current = historical_T_veh_to_map.block<2, 2>(0, 0);
-            // 调用 updateMap 进行初步去噪和匹配
-            updateMap(p_global.x(), p_global.y(),cone_obs.x, cone_obs.y, r, g, b, cone_obs.color, dist, R_current);
-            // *********** 地图更新 ***********
-        }
-
-            // ******** 地图维护 ********
-        for (auto it = cone_map_.begin(); it != cone_map_.end(); ) {
-            // 如果在车辆视野范围内，且本帧没被匹配上，就进行惩罚
-            bool in_view = isInFieldOfView(it->pos, historical_T_veh_to_map);
-            if (in_view && !it->matched_this_frame) {
-                // MISS则接收惩罚
-                it->existence_score += (params_.l_miss);
-            }
-
-            // 如果存在概率小于最低限值，从地图中删除
-            if (it->existence_score <= params_.l_min) {
-                it = cone_map_.erase(it); 
-            } else {
-                // 如果存在概率大于稳定阈值，is_stable = True
-                // 如果既不小于最低值又不大于稳定阈值， is_stable = False
-                it->is_stable = (it->existence_score > params_.l_stable);
-                // 继续检查下一个
-                ++it;
-            }
-        }
-            // ******** 地图维护 ********
+        processTrackObservations(map_msg, historical_T_veh_to_map);
+        maintainConeMap(historical_T_veh_to_map, true);
     }
 
     // 循迹赛道建图策略
-    void processAutocrossTrack(const drd25_msgs::msg::Map::ConstSharedPtr& map_msg, 
+    void processAutocrossTrack(const drd25_msgs::msg::Map& map_msg, 
                                const Eigen::Matrix4d& historical_T_veh_to_map, 
                                const builtin_interfaces::msg::Time& stamp, 
-                               double tx, double ty, double tz, 
-                               const Eigen::Matrix3d& R_vehicle)
+                               double tx, double ty, double tz)
     {
-            // *********** 前端观测数据处理 ***********
-        for (const auto &cone_obs : map_msg->track) {
-
-            // 未知类型锥桶不参与建图
-            if (cone_obs.color == drd25_msgs::msg::Cone::UNKNOWN)
-                continue;
-            
-            // 坐标转换，这里的 (x,y) 为雷达坐标系下
-            Eigen::Vector4d p_lidar(cone_obs.x, cone_obs.y, 0.0, 1.0);
-            // 转换公式：Global = T_Vehicle2Map * T_Lidar2Vehicle * Point_Lidar
-            Eigen::Vector4d p_global = historical_T_veh_to_map * T_l2v_ * p_lidar;
-            // 确定锥桶颜色
-            float r = 0.0f, g = 0.0f, b = 0.0f;
-            parseConeColor(cone_obs.color, r, g, b);
-            // *********** 前端观测数据处理 ***********
-
-            // *********** 地图更新 ***********
-            // 基于相机距离给定置信度，离相机越近的观测越可信
-            double dist = std::sqrt(cone_obs.x * cone_obs.x + cone_obs.y * cone_obs.y);
-            // 提取车辆在地图中的 2D 旋转矩阵 (用于旋转噪声)
-            Eigen::Matrix2d R_current = historical_T_veh_to_map.block<2, 2>(0, 0);
-            // 调用 updateMap 进行初步去噪和匹配
-            updateMap(p_global.x(), p_global.y(), cone_obs.x, cone_obs.y, r, g, b, cone_obs.color, dist, R_current);
-            // *********** 地图更新 ***********
-        }
+        processTrackObservations(map_msg, historical_T_veh_to_map);
 
         // 只有在未锁图的情况下才进行锥桶删减
         if (!map_locked_){
-            // ******** 地图维护 ********
-            for (auto it = cone_map_.begin(); it != cone_map_.end(); ) {
-                // 如果在车辆视野范围内，且本帧没被匹配上，就进行惩罚
-                bool in_view = isInFieldOfView(it->pos, historical_T_veh_to_map);
-                if (in_view && !it->matched_this_frame) {
-                    it->existence_score += params_.l_miss;
-                }
-                // 如果存在概率小于最低限值，从地图中删除
-                if (it->existence_score < params_.l_min) {
-                    it = cone_map_.erase(it); 
-                } else {
-                    // 如果存在概率大于稳定阈值，is_stable = True
-                    // 如果既不小于最低值又不大于稳定阈值， is_stable = False
-                    it->is_stable = (it->existence_score > params_.l_stable);
-                    // 继续检查下一个
-                    ++it;
-                }
-            }
+            maintainConeMap(historical_T_veh_to_map, false);
         }
-            // ******** 地图维护 ********
 
         // ************************* 回环检测 ************************
-        // 判断是否触发回环，如果检测到回环，loop_closed = true
-        double current_time = stamp.sec + stamp.nanosec * 1e-9;
-        bool loop_closed = loop_detector_.detectLoopClosure(current_time, Eigen::Vector3d(tx, ty, tz), !map_locked_);
-        // 如果触发回环
-        if (loop_closed){
-            lap_count_ ++;  // 回环成功，圈数+1
-
-            if (!map_locked_){  //如果还未锁图，说明这是第一圈跑完触发回环
-            RCLCPP_INFO(this->get_logger(), "=== LAP 1 COMPLETED! Map Locked! ===");
-            // 为防止第一圈建完图后，一些没有达到稳定门槛但又没有被斩杀掉的锥桶在第二圈反复诈尸
-            // 在第一圈触发回环后，删掉所有不稳定的锥桶
-            int all_cones = cone_map_.size();
-            cone_map_.erase(
-                //remove_if(范围， 条件=true)
-                std::remove_if(cone_map_.begin(), cone_map_.end(),
-                            // Lamba函数，当is_stable = false时，返回true
-                            [](const GlobalCone& c) {return !c.is_stable;}),
-                cone_map_.end()
-            );
-            int left_cones = cone_map_.size();
-            RCLCPP_INFO(this->get_logger(), "Purged %d unstable cones. Remaning %ld cones.",
-                        all_cones - left_cones, cone_map_.size());
-            map_locked_ = true;
-        }else{
-            // 进入这个分支，说明不是第一圈探索圈触发回环，而是后续的冲刺圈
-            RCLCPP_INFO(this->get_logger(), "LAP %d COMPLETE. Let's fuuuuuuuucking push!", lap_count_ );
-            }
-            // 触发回环后(无论是探索圈还是冲刺圈），重置回环检测器状态
-            loop_detector_.resetLoopStatus();         
-        }
-        // ****************************** 回环检测 ****************************
+        handleAutocrossLoopClosure(stamp, tx, ty, tz);
     }
     
     // 八字赛道建图策略
-    void processSkidpadTrack(const drd25_msgs::msg::Map::ConstSharedPtr& map_msg, 
-                               const Eigen::Matrix4d& historical_T_veh_to_map, 
-                               const builtin_interfaces::msg::Time& stamp, 
-                               double tx, double ty, double tz, 
-                               const Eigen::Matrix3d& R_vehicle)
+    void processSkidpadTrack(const drd25_msgs::msg::Map& /*map_msg*/, 
+                               const Eigen::Matrix4d& /*historical_T_veh_to_map*/, 
+                               const builtin_interfaces::msg::Time& /*stamp*/, 
+                               double /*tx*/, double /*ty*/, double /*tz*/)
     {
         // TODO:待完善八字的建图策略
     }
@@ -546,6 +371,137 @@ private:
     // 大于0为逆时针，向左转；小于0为顺时针，向右转
     double caculateYawRate(const gnss_ins_msg::msg::Gnssins64::ConstSharedPtr& msg){
         return msg->imu_gyro_z * M_PI / 180.0;
+    }
+
+    void projectToUtm(const gnss_ins_msg::msg::Gnssins64& msg, double& utm_e, double& utm_n) const {
+        PJ_COORD input_coord = proj_coord(msg.latitude, msg.longitude, 0, 0);
+        PJ_COORD output_coord = proj_trans(P_, PJ_FWD, input_coord);
+        utm_e = output_coord.xy.x;
+        utm_n = output_coord.xy.y;
+    }
+
+    bool ensureOriginInitialized(double utm_e, double utm_n) {
+        if (is_origin_set_) return true;
+
+        origin_e_ = utm_e;
+        origin_n_ = utm_n;
+        is_origin_set_ = true;
+        RCLCPP_INFO(this->get_logger(), "Origin set at E:%.2f, N:%.2f", origin_e_, origin_n_);
+        return false;
+    }
+
+    void maybeInitializeLoopDetector() {
+        if (is_lcd_initialized_) return;
+
+        loop_detector_.setOrigin(Eigen::Vector3d(0.0, 0.0, 0.0));
+        is_lcd_initialized_ = true;
+        RCLCPP_INFO(this->get_logger(), "Loop Closure Detector Initialized");
+    }
+
+    VehiclePoseEstimate buildVehiclePoseEstimate(const gnss_ins_msg::msg::Gnssins64& msg, double utm_e, double utm_n) const {
+        VehiclePoseEstimate pose;
+        pose.tx = utm_e - origin_e_;
+        pose.ty = utm_n - origin_n_;
+        pose.tz = 0.0;
+        pose.vel_e = msg.vel_e;
+        pose.vel_n = msg.vel_n;
+
+        // 旋转部分 (ZYX 顺序)
+        // imu坐标系是x-右， y-前；以北向(y轴)正方向为航向角0度，逆时针为正，x轴指向东向
+        // Eigen/ROS是x-前， y-左；以东向(x轴)正方向为航向角0度，逆时针为正
+        // 二者虽然在坐标系的定义和航向角的定义都不同，但是两个不同却成就了相同的坐标系(x都指东,y都指北)
+        Eigen::AngleAxisd roll(msg.roll * M_PI/180.0, Eigen::Vector3d::UnitX());
+        Eigen::AngleAxisd pitch(msg.pitch * M_PI/180.0, Eigen::Vector3d::UnitY());
+        Eigen::AngleAxisd yaw(msg.yaw * M_PI/180.0, Eigen::Vector3d::UnitZ());
+        Eigen::Matrix3d R_imu = (yaw * pitch * roll).toRotationMatrix();
+
+        // 现在得到的旋转矩阵R_imu是imu坐标系的，我们最后还要让其变成x-前， y-左的ROS坐标系
+        // imu——>vehicle的修正矩阵,x向右转换成x向前
+        Eigen::Matrix3d R_fix;
+        R_fix << 0, -1, 0,
+                 1, 0, 0,
+                 0, 0, 1;
+        pose.R_vehicle = R_imu * R_fix;
+
+        // historical_T_veh_to_map 是与感知消息时间戳对齐的历史位姿
+        pose.T_veh_to_map.block<3,3>(0,0) = pose.R_vehicle;
+        pose.T_veh_to_map.block<3,1>(0,3) = Eigen::Vector3d(pose.tx, pose.ty, pose.tz);
+        return pose;
+    }
+
+    void resetFrameMatches() {
+        for (auto &cone : cone_map_) {
+            cone.matched_this_frame = false;
+        }
+    }
+
+    void processTrackObservations(const drd25_msgs::msg::Map& map_msg, const Eigen::Matrix4d& historical_T_veh_to_map) {
+        const Eigen::Matrix4d T_lidar_to_map = historical_T_veh_to_map * T_l2v_;
+        const Eigen::Matrix2d R_current = historical_T_veh_to_map.block<2, 2>(0, 0);
+
+        for (const auto &cone_obs : map_msg.track) {
+            if (cone_obs.color == drd25_msgs::msg::Cone::UNKNOWN) {
+                continue;
+            }
+
+            Eigen::Vector4d p_lidar(cone_obs.x, cone_obs.y, 0.0, 1.0);
+            Eigen::Vector4d p_global = T_lidar_to_map * p_lidar;
+
+            float r = 0.0f;
+            float g = 0.0f;
+            float b = 0.0f;
+            parseConeColor(cone_obs.color, r, g, b);
+
+            double dist = std::sqrt(cone_obs.x * cone_obs.x + cone_obs.y * cone_obs.y);
+            updateMap(p_global.x(), p_global.y(), cone_obs.x, cone_obs.y, r, g, b, cone_obs.color, dist, R_current);
+        }
+    }
+
+    void maintainConeMap(const Eigen::Matrix4d& historical_T_veh_to_map, bool remove_on_equal_min) {
+        for (auto it = cone_map_.begin(); it != cone_map_.end(); ) {
+            bool in_view = isInFieldOfView(it->pos, historical_T_veh_to_map);
+            if (in_view && !it->matched_this_frame) {
+                it->existence_score += params_.l_miss;
+            }
+
+            bool should_remove = remove_on_equal_min
+                ? (it->existence_score <= params_.l_min)
+                : (it->existence_score < params_.l_min);
+
+            if (should_remove) {
+                it = cone_map_.erase(it);
+            } else {
+                it->is_stable = (it->existence_score > params_.l_stable);
+                ++it;
+            }
+        }
+    }
+
+    void handleAutocrossLoopClosure(const builtin_interfaces::msg::Time& stamp, double tx, double ty, double tz) {
+        double current_time = stamp.sec + stamp.nanosec * 1e-9;
+        bool loop_closed = loop_detector_.detectLoopClosure(current_time, Eigen::Vector3d(tx, ty, tz), !map_locked_);
+        if (!loop_closed) return;
+
+        lap_count_ ++;
+
+        if (!map_locked_) {
+            RCLCPP_INFO(this->get_logger(), "=== LAP 1 COMPLETED! Map Locked! ===");
+
+            int all_cones = cone_map_.size();
+            cone_map_.erase(
+                std::remove_if(cone_map_.begin(), cone_map_.end(),
+                            [](const GlobalCone& c) {return !c.is_stable;}),
+                cone_map_.end()
+            );
+            int left_cones = cone_map_.size();
+            RCLCPP_INFO(this->get_logger(), "Purged %d unstable cones. Remaning %ld cones.",
+                        all_cones - left_cones, cone_map_.size());
+            map_locked_ = true;
+        } else {
+            RCLCPP_INFO(this->get_logger(), "LAP %d COMPLETE. Let's fuuuuuuuucking push!", lap_count_ );
+        }
+
+        loop_detector_.resetLoopStatus();
     }
 
     // 发布Tf, Odom, Path的辅助函数
