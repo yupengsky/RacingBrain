@@ -4,6 +4,7 @@
 #include <mutex>
 #include <atomic>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
@@ -31,6 +32,14 @@
 // 回环检测器
 #include "slam/loop_closure_detector.hpp"
 
+namespace {
+using SteadyClock = std::chrono::steady_clock;
+
+double elapsed_ms(SteadyClock::time_point start, SteadyClock::time_point end = SteadyClock::now())
+{
+    return std::chrono::duration<double, std::milli>(end - start).count();
+}
+}  // namespace
 
 // 赛道类型枚举
 enum class TrackType {
@@ -122,6 +131,10 @@ private:
         int rejected_roi = 0;
         int total_tracked = 0;
         int stable_cones = 0;
+        double pose_ms = 0.0;
+        double mapping_ms = 0.0;
+        double publish_global_map_ms = 0.0;
+        double sync_callback_ms = 0.0;
     };
 
     // 定义系统参数（基本不会变的参数）
@@ -296,6 +309,8 @@ private:
     {
         if (!P_ || !is_origin_set_) return;
 
+        const auto sync_callback_start = SteadyClock::now();
+        const auto pose_start = SteadyClock::now();
         double utm_e = 0.0;
         double utm_n = 0.0;
         projectToUtm(*gnss_msg, utm_e, utm_n);
@@ -305,14 +320,17 @@ private:
         // 获取实时对地速度和z轴角速度（并未和ROS坐标系对齐）
         current_speed_ = caculateSpeed(gnss_msg);
         current_gyro_z_ = caculateYawRate(gnss_msg);
+        const double pose_ms = elapsed_ms(pose_start);
         //  *********************** 位姿提取和计算 ***********************
 
         //  *********************** 建图 ***********************
         // 保证在当前代码块内独占访问 cone_map_，防止多线程数据竞争和崩溃
         std::lock_guard<std::mutex> lock(map_mutex_);
         resetEvaluationFrameStats(map_msg->track.size());
+        eval_stats_.pose_ms = pose_ms;
 
         // 每一帧建图开始前，先把所有锥桶标记为未匹配
+        const auto mapping_start = SteadyClock::now();
         resetFrameMatches();
 
         // 根据不同赛道，调用不同的建图策略
@@ -327,10 +345,11 @@ private:
                 processSkidpadTrack(*map_msg, pose.T_veh_to_map, gnss_msg->header.stamp, pose.tx, pose.ty, pose.tz);
                 break;
         }
+        eval_stats_.mapping_ms = elapsed_ms(mapping_start);
     // *********************** 建图 **********************
     
         // 发布地图
-        publishGlobalMap(gnss_msg->header.stamp);
+        publishGlobalMap(gnss_msg->header.stamp, sync_callback_start);
     }
 
     // 直线赛道建图策略
@@ -768,7 +787,8 @@ private:
     }
 
     // 锥桶地图的发布
-    void publishGlobalMap(const builtin_interfaces::msg::Time& stamp) {
+    void publishGlobalMap(const builtin_interfaces::msg::Time& stamp, SteadyClock::time_point sync_callback_start) {
+        const auto publish_start = SteadyClock::now();
         visualization_msgs::msg::MarkerArray map_msg;
 
         //删除上一帧的图像，完成更新
@@ -830,6 +850,8 @@ private:
         // ************** 视觉渲染 **************
     
         global_map_pub_->publish(map_msg);
+        eval_stats_.publish_global_map_ms = elapsed_ms(publish_start);
+        eval_stats_.sync_callback_ms = elapsed_ms(sync_callback_start);
         publishEvaluationMetrics(stamp);
     
         // 打印当前跟踪总量和已确认稳定的数量
@@ -869,6 +891,10 @@ private:
             << ",\"lap_count\":" << lap_count_
             << ",\"speed\":" << current_speed_
             << ",\"gyro_z\":" << current_gyro_z_
+            << ",\"pose_ms\":" << eval_stats_.pose_ms
+            << ",\"mapping_ms\":" << eval_stats_.mapping_ms
+            << ",\"publish_global_map_ms\":" << eval_stats_.publish_global_map_ms
+            << ",\"sync_callback_ms\":" << eval_stats_.sync_callback_ms
             << "}";
         msg.data = out.str();
         eval_metrics_pub_->publish(msg);

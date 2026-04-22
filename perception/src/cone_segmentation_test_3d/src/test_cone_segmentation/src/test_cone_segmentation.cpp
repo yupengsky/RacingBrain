@@ -1,5 +1,23 @@
 #include "test_cone_segmentation/test_cone_segmentation.hpp"
 
+#include <chrono>
+#include <iomanip>
+#include <sstream>
+
+namespace {
+using SteadyClock = std::chrono::steady_clock;
+
+double elapsed_ms(SteadyClock::time_point start, SteadyClock::time_point end = SteadyClock::now())
+{
+    return std::chrono::duration<double, std::milli>(end - start).count();
+}
+
+double stamp_to_sec(const std_msgs::msg::Header& header)
+{
+    return static_cast<double>(header.stamp.sec) + static_cast<double>(header.stamp.nanosec) * 1e-9;
+}
+}  // namespace
+
 ConeSegmentationNode::ConeSegmentationNode() : Node("cone_segmentation_node")
 {
     setup_parameters();
@@ -20,6 +38,9 @@ ConeSegmentationNode::ConeSegmentationNode() : Node("cone_segmentation_node")
     // 话题名: /cone_detection_custom
     custom_cones_pub_ = this->create_publisher<test_cone_segmentation::msg::ThreeDConeArray>(
         "/cone_detection_custom", 10);
+    if (eval_metrics_enabled_) {
+        metrics_pub_ = this->create_publisher<std_msgs::msg::String>("/perception/lidar/evaluation/metrics", 10);
+    }
 
     // 打印当前模式
     if (cfg_.use_csf) {
@@ -54,6 +75,7 @@ void ConeSegmentationNode::setup_parameters()
     // 锥桶拟合参数
     this->declare_parameter<double>("cone_ransac_distance_threshold", cfg_.cone_ransac_distance_threshold);
     this->declare_parameter<int>("cone_ransac_max_iterations", cfg_.cone_ransac_max_iterations);
+    this->declare_parameter<bool>("evaluation.enable_debug_metrics", false);
     
     // 读取参数
     cfg_.use_csf = this->get_parameter("use_csf").as_bool();
@@ -75,6 +97,7 @@ void ConeSegmentationNode::setup_parameters()
     
     cfg_.cone_ransac_distance_threshold = this->get_parameter("cone_ransac_distance_threshold").as_double();
     cfg_.cone_ransac_max_iterations = this->get_parameter("cone_ransac_max_iterations").as_int();
+    eval_metrics_enabled_ = this->get_parameter("evaluation.enable_debug_metrics").as_bool();
 
     cfg_.MIN_CONE_HEIGHT = 0.12;
     cfg_.MAX_CONE_HEIGHT = 0.60;
@@ -93,13 +116,70 @@ void ConeSegmentationNode::topic_callback(const sensor_msgs::msg::PointCloud2::C
 
 void ConeSegmentationNode::process_pointcloud(const sensor_msgs::msg::PointCloud2::ConstSharedPtr pc_msg)
 {
+    const auto callback_start = SteadyClock::now();
+    double convert_ms = 0.0;
+    double roi_ms = 0.0;
+    double voxel_ms = 0.0;
+    double ground_ms = 0.0;
+    double debug_publish_ms = 0.0;
+    double clustering_ms = 0.0;
+    double cone_filter_ms = 0.0;
+    double result_publish_ms = 0.0;
+    int input_points = 0;
+    int roi_points = 0;
+    int filtered_points = 0;
+    int obstacle_points = 0;
+    int ground_points = 0;
+    int cluster_count = 0;
+    int cone_count = 0;
+
+    auto publish_metrics = [&](const std::string& event) {
+        if (!eval_metrics_enabled_ || !metrics_pub_) return;
+
+        std_msgs::msg::String msg;
+        std::ostringstream out;
+        out << std::fixed << std::setprecision(9);
+        out << "{"
+            << "\"component\":\"lidar_cluster\""
+            << ",\"event\":\"" << event << "\""
+            << ",\"stamp\":" << stamp_to_sec(pc_msg->header)
+            << ",\"frame_id\":\"" << pc_msg->header.frame_id << "\""
+            << ",\"use_csf\":" << (cfg_.use_csf ? "true" : "false")
+            << ",\"input_points\":" << input_points
+            << ",\"roi_points\":" << roi_points
+            << ",\"filtered_points\":" << filtered_points
+            << ",\"obstacle_points\":" << obstacle_points
+            << ",\"ground_points\":" << ground_points
+            << ",\"cluster_count\":" << cluster_count
+            << ",\"cone_count\":" << cone_count
+            << ",\"convert_ms\":" << convert_ms
+            << ",\"roi_ms\":" << roi_ms
+            << ",\"voxel_ms\":" << voxel_ms
+            << ",\"ground_segmentation_ms\":" << ground_ms
+            << ",\"debug_publish_ms\":" << debug_publish_ms
+            << ",\"clustering_ms\":" << clustering_ms
+            << ",\"cone_filter_ms\":" << cone_filter_ms
+            << ",\"result_publish_ms\":" << result_publish_ms
+            << ",\"total_ms\":" << elapsed_ms(callback_start)
+            << "}";
+        msg.data = out.str();
+        metrics_pub_->publish(msg);
+    };
+
     // 0. 转换消息类型 ROS -> PCL
+    const auto convert_start = SteadyClock::now();
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::fromROSMsg(*pc_msg, *cloud);
+    convert_ms = elapsed_ms(convert_start);
+    input_points = static_cast<int>(cloud->size());
 
-    if (cloud->empty()) return;
+    if (cloud->empty()) {
+        publish_metrics("empty_cloud");
+        return;
+    }
 
     // 1. ROI 截取 (简单距离过滤)
+    const auto roi_start = SteadyClock::now();
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_roi(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
     tree->setInputCloud(cloud);
@@ -116,20 +196,30 @@ void ConeSegmentationNode::process_pointcloud(const sensor_msgs::msg::PointCloud
         cloud_roi->height = 1;
         cloud_roi->is_dense = true;
     }
-    else { return; }
+    else {
+        roi_ms = elapsed_ms(roi_start);
+        publish_metrics("empty_roi");
+        return;
+    }
+    roi_points = static_cast<int>(cloud_roi->size());
+    roi_ms = elapsed_ms(roi_start);
 
     // 2. 体素滤波 (降采样)
+    const auto voxel_start = SteadyClock::now();
     pcl::VoxelGrid<pcl::PointXYZ> vg;
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
     vg.setInputCloud(cloud_roi);
     vg.setLeafSize(cfg_.voxel_size, cfg_.voxel_size, cfg_.voxel_size);
     vg.filter(*cloud_filtered);
+    filtered_points = static_cast<int>(cloud_filtered->size());
+    voxel_ms = elapsed_ms(voxel_start);
 
     // 准备容器
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_obstacles(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ground(new pcl::PointCloud<pcl::PointXYZ>); 
 
     // 3. 地面分割 (模式切换逻辑)
+    const auto ground_start = SteadyClock::now();
     if (cfg_.use_csf) 
     {
         // === 模式 A: CSF ===
@@ -202,8 +292,12 @@ void ConeSegmentationNode::process_pointcloud(const sensor_msgs::msg::PointCloud
             }
         }
     }
+    obstacle_points = static_cast<int>(cloud_obstacles->size());
+    ground_points = static_cast<int>(cloud_ground->size());
+    ground_ms = elapsed_ms(ground_start);
 
     // 4. 发布调试点云
+    const auto debug_publish_start = SteadyClock::now();
     if (debug_csf_obstacle_pub_->get_subscription_count() > 0 || true) {
         sensor_msgs::msg::PointCloud2 msg_debug;
         pcl::toROSMsg(*cloud_obstacles, msg_debug);
@@ -216,10 +310,15 @@ void ConeSegmentationNode::process_pointcloud(const sensor_msgs::msg::PointCloud
         msg_ground.header = pc_msg->header;
         debug_csf_ground_pub_->publish(msg_ground);
     }
+    debug_publish_ms = elapsed_ms(debug_publish_start);
 
-    if (cloud_obstacles->empty()) return;
+    if (cloud_obstacles->empty()) {
+        publish_metrics("no_obstacles");
+        return;
+    }
 
     // 5. 欧几里得聚类
+    const auto clustering_start = SteadyClock::now();
     pcl::search::KdTree<pcl::PointXYZ>::Ptr tree_obs(new pcl::search::KdTree<pcl::PointXYZ>);
     tree_obs->setInputCloud(cloud_obstacles);
 
@@ -231,8 +330,11 @@ void ConeSegmentationNode::process_pointcloud(const sensor_msgs::msg::PointCloud
     ec.setSearchMethod(tree_obs);
     ec.setInputCloud(cloud_obstacles);
     ec.extract(cluster_indices);
+    cluster_count = static_cast<int>(cluster_indices.size());
+    clustering_ms = elapsed_ms(clustering_start);
 
     // 6. 锥桶筛选与拟合
+    const auto cone_filter_start = SteadyClock::now();
     // 准备拟合器
     pcl::SACSegmentationFromNormals<pcl::PointXYZ, pcl::Normal> seg_cone;
     pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
@@ -316,11 +418,16 @@ void ConeSegmentationNode::process_pointcloud(const sensor_msgs::msg::PointCloud
         cone.dimensions = Eigen::Vector3d(dx, dy, dz);
         detected_cones.push_back(cone);
     }
+    cone_count = static_cast<int>(detected_cones.size());
+    cone_filter_ms = elapsed_ms(cone_filter_start);
 
     // 7. 发布最终结果
     if (!detected_cones.empty()) {
+        const auto result_publish_start = SteadyClock::now();
         publish_results(detected_cones, pc_msg->header);
+        result_publish_ms = elapsed_ms(result_publish_start);
     }
+    publish_metrics("processed");
 }
 
 // 几何辅助判断

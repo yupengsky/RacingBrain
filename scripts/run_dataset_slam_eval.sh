@@ -68,7 +68,7 @@ echo "Idle timeout: ${IDLE_TIMEOUT}"
 echo "Duplicate threshold: ${DUPLICATE_THRESHOLD}"
 echo "Logs: ${LOG_DIR}"
 
-ros2 launch run_perception system_run.launch.py >"${LOG_DIR}/perception.log" 2>&1 &
+ros2 launch run_perception system_run.launch.py "eval_debug:=true" >"${LOG_DIR}/perception.log" 2>&1 &
 PERCEPTION_PID=$!
 
 ros2 launch slam slam.launch.py "track:=${TRACK}" "rviz:=${RVIZ}" "eval_debug:=true" >"${LOG_DIR}/slam.log" 2>&1 &

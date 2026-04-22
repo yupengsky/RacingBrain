@@ -138,6 +138,25 @@ def point_bounds(points: List[Tuple[float, float]]) -> Dict[str, Optional[float]
     }
 
 
+def summarize_processing_times(rows: Iterable[Dict[str, Any]]) -> Dict[str, Dict[str, Dict[str, Optional[float]]]]:
+    grouped: Dict[str, Dict[str, List[float]]] = defaultdict(lambda: defaultdict(list))
+    for row in rows:
+        component = str(row.get("component") or "unknown")
+        for key, value in row.items():
+            if not key.endswith("_ms"):
+                continue
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(number):
+                grouped[component][key].append(number)
+    return {
+        component: {stage: summarize(values) for stage, values in sorted(stages.items())}
+        for component, stages in sorted(grouped.items())
+    }
+
+
 class TopicStats:
     def __init__(self) -> None:
         self.count = 0
@@ -208,6 +227,7 @@ class EvalMonitor(Node):
         self.map_rows: List[Dict[str, Any]] = []
         self.odom_rows: List[Dict[str, Any]] = []
         self.slam_debug_rows: List[Dict[str, Any]] = []
+        self.timing_rows: List[Dict[str, Any]] = []
 
         self.yolo_counts: List[int] = []
         self.lidar_cone_counts: List[int] = []
@@ -233,6 +253,9 @@ class EvalMonitor(Node):
         self.create_subscription(MarkerArray, "/global_map", self.cb_global_map, 10)
         self.create_subscription(Odometry, "/vehicle_odom", self.cb_odom, 10)
         self.create_subscription(NavPath, "/vehicle_path", self.cb_path, 10)
+        self.create_subscription(String, "/perception/yolo/evaluation/metrics", self.cb_yolo_metrics, 10)
+        self.create_subscription(String, "/perception/lidar/evaluation/metrics", self.cb_lidar_metrics, 10)
+        self.create_subscription(String, "/perception/fusion/evaluation/metrics", self.cb_fusion_metrics, 10)
         self.create_subscription(String, "/slam/evaluation/metrics", self.cb_slam_debug, 10)
 
     def mark(self, topic: str, stamp: Optional[float], extra: Optional[Dict[str, Any]] = None) -> None:
@@ -427,15 +450,30 @@ class EvalMonitor(Node):
         stamp = msg_stamp(msg)
         self.mark("/vehicle_path", stamp, {"pose_count": len(msg.poses)})
 
-    def cb_slam_debug(self, msg: String) -> None:
+    def record_timing_metrics(self, msg: String, topic: str, default_component: str) -> Dict[str, Any]:
         now = time.time()
         try:
             data = json.loads(msg.data)
         except json.JSONDecodeError:
             data = {"raw": msg.data}
+        data.setdefault("component", default_component)
         data["elapsed_wall_sec"] = now - self.start_wall
+        self.timing_rows.append(data)
+        self.mark(topic, data.get("stamp"), data)
+        return data
+
+    def cb_yolo_metrics(self, msg: String) -> None:
+        self.record_timing_metrics(msg, "/perception/yolo/evaluation/metrics", "yolo")
+
+    def cb_lidar_metrics(self, msg: String) -> None:
+        self.record_timing_metrics(msg, "/perception/lidar/evaluation/metrics", "lidar_cluster")
+
+    def cb_fusion_metrics(self, msg: String) -> None:
+        self.record_timing_metrics(msg, "/perception/fusion/evaluation/metrics", "fusion")
+
+    def cb_slam_debug(self, msg: String) -> None:
+        data = self.record_timing_metrics(msg, "/slam/evaluation/metrics", "slam")
         self.slam_debug_rows.append(data)
-        self.mark("/slam/evaluation/metrics", data.get("stamp"), data)
 
     @staticmethod
     def marker_color_name(marker: Marker) -> str:
@@ -482,6 +520,7 @@ class EvalMonitor(Node):
                 name: summarize(values)
                 for name, values in sorted(latency_by_name.items())
             },
+            "processing_time_ms": summarize_processing_times(self.timing_rows),
             "perception": {
                 "yolo_cones_per_frame": summarize(self.yolo_counts),
                 "lidar_cones_per_frame": summarize(self.lidar_cone_counts),
@@ -569,6 +608,7 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
     map_metrics = summary.get("map", {})
     trajectory = summary.get("trajectory", {})
     slam_debug = summary.get("slam_debug", {})
+    processing_time = summary.get("processing_time_ms", {})
 
     def fmt(value: Any, digits: int = 3) -> str:
         if value is None:
@@ -610,6 +650,27 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
             f"- LiDAR cones/frame mean: `{fmt(perception.get('lidar_cones_per_frame', {}).get('mean'))}`",
             f"- Fused cones/frame mean: `{fmt(perception.get('fused_cones_per_frame', {}).get('mean'))}`",
             f"- Fused UNKNOWN ratio mean: `{fmt(perception.get('fused_unknown_ratio', {}).get('mean'))}`",
+            "",
+            "## Processing Time",
+            "",
+            "| Component | Stage | Frames | Mean ms | P95 ms |",
+            "|---|---|---:|---:|---:|",
+        ]
+    )
+    for component, stages in processing_time.items():
+        for stage, stats in stages.items():
+            lines.append(
+                "| {component} | {stage} | {count} | {mean} | {p95} |".format(
+                    component=component,
+                    stage=stage,
+                    count=stats.get("count", 0),
+                    mean=fmt(stats.get("mean")),
+                    p95=fmt(stats.get("p95")),
+                )
+            )
+
+    lines.extend(
+        [
             "",
             "## Map",
             "",
@@ -712,6 +773,31 @@ def maybe_write_plots(log_dir: Path, monitor: EvalMonitor) -> None:
             plt.savefig(plot_dir / "latency_boxplot.png")
         plt.close()
 
+    if monitor.timing_rows:
+        by_component: Dict[str, List[float]] = defaultdict(list)
+        for row in monitor.timing_rows:
+            try:
+                total_ms = float(row.get("total_ms"))
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(total_ms):
+                by_component[str(row.get("component") or "unknown")].append(total_ms)
+        if by_component:
+            plt.figure(figsize=(9, 5))
+            labels = []
+            data = []
+            for component, values in sorted(by_component.items()):
+                if values:
+                    labels.append(component)
+                    data.append(values)
+            if data:
+                plt.boxplot(data, labels=labels, showfliers=False)
+                plt.ylabel("total processing time (ms)")
+                plt.xticks(rotation=20, ha="right")
+                plt.tight_layout()
+                plt.savefig(plot_dir / "processing_time_boxplot.png")
+            plt.close()
+
     if monitor.odom_rows:
         plt.figure(figsize=(6, 6))
         plt.plot([r["x"] for r in monitor.odom_rows], [r["y"] for r in monitor.odom_rows], label="odom")
@@ -772,6 +858,7 @@ def main() -> int:
         write_csv(log_dir / "map_frames.csv", monitor.map_rows)
         write_csv(log_dir / "odom.csv", monitor.odom_rows)
         write_csv(log_dir / "slam_debug_frames.csv", monitor.slam_debug_rows)
+        write_csv(log_dir / "processing_times.csv", monitor.timing_rows)
         write_report(log_dir, summary)
         maybe_write_plots(log_dir, monitor)
         print(json.dumps(summary, indent=2, ensure_ascii=False))

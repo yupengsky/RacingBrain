@@ -1,4 +1,5 @@
 import os
+import json
 import time
 from configparser import ConfigParser
 from pathlib import Path
@@ -10,6 +11,7 @@ import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
 from sensor_msgs.msg import Image
+from std_msgs.msg import String
 from ultralytics import YOLO
 
 from cone_interfaces.msg import Cone
@@ -59,12 +61,14 @@ class YoloDetectorNode(Node):
         self.declare_parameter("image_topic", "/camera/image_raw")
         self.declare_parameter("max_fps", 10.0)
         self.declare_parameter("enable_hsv_check", False)
+        self.declare_parameter("evaluation.enable_debug_metrics", False)
 
         self.model_path = self.get_parameter("model_path").get_parameter_value().string_value
         self.conf_threshold = float(self.get_parameter("conf_threshold").value)
         self.image_topic = self.get_parameter("image_topic").get_parameter_value().string_value
         self.max_fps = float(self.get_parameter("max_fps").value)
         self.enable_hsv_check = bool(self.get_parameter("enable_hsv_check").value)
+        self.enable_debug_metrics = bool(self.get_parameter("evaluation.enable_debug_metrics").value)
         self.min_period = 1.0 / self.max_fps if self.max_fps > 0.0 else 0.0
 
         if not self.model_path:
@@ -77,6 +81,9 @@ class YoloDetectorNode(Node):
 
         self.debug_pub = self.create_publisher(Image, "/yolo/debug_image", 10)
         self.cones_pub = self.create_publisher(ConeArray, "/yolo/cones", 10)
+        self.metrics_pub = None
+        if self.enable_debug_metrics:
+            self.metrics_pub = self.create_publisher(String, "/perception/yolo/evaluation/metrics", 10)
         self.image_sub = self.create_subscription(
             Image,
             self.image_topic,
@@ -90,30 +97,67 @@ class YoloDetectorNode(Node):
         )
 
     def image_only_callback(self, image_msg: Image) -> None:
+        callback_start = time.perf_counter()
         now = time.monotonic()
         if self.min_period > 0.0 and now - self.last_inference_time < self.min_period:
+            self._publish_metrics(
+                image_msg,
+                {
+                    "event": "skipped_throttle",
+                    "skipped": True,
+                    "total_ms": self._elapsed_ms(callback_start),
+                    "max_fps": self.max_fps,
+                },
+            )
             return
         self.last_inference_time = now
 
         try:
+            convert_start = time.perf_counter()
             cv_image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding="bgr8")
+            convert_ms = self._elapsed_ms(convert_start)
         except Exception as exc:
             self.get_logger().error(f"Failed to convert image: {exc}")
+            self._publish_metrics(
+                image_msg,
+                {
+                    "event": "conversion_failed",
+                    "skipped": True,
+                    "total_ms": self._elapsed_ms(callback_start),
+                },
+            )
             return
 
         try:
+            inference_start = time.perf_counter()
             result = self.model.predict(
                 source=cv_image,
                 conf=self.conf_threshold,
                 verbose=False,
             )[0]
+            inference_ms = self._elapsed_ms(inference_start)
         except Exception as exc:
             self.get_logger().error(f"YOLO inference failed: {exc}")
+            self._publish_metrics(
+                image_msg,
+                {
+                    "event": "inference_failed",
+                    "skipped": True,
+                    "convert_ms": convert_ms,
+                    "total_ms": self._elapsed_ms(callback_start),
+                },
+            )
             return
 
+        build_start = time.perf_counter()
         cone_array = self._build_cone_array(image_msg, result)
-        debug_image = self.draw_detections(cv_image.copy(), result)
+        build_ms = self._elapsed_ms(build_start)
 
+        draw_start = time.perf_counter()
+        debug_image = self.draw_detections(cv_image.copy(), result)
+        draw_ms = self._elapsed_ms(draw_start)
+
+        publish_start = time.perf_counter()
         self.cones_pub.publish(cone_array)
         try:
             debug_msg = self.bridge.cv2_to_imgmsg(debug_image, encoding="bgr8")
@@ -121,6 +165,26 @@ class YoloDetectorNode(Node):
             self.debug_pub.publish(debug_msg)
         except Exception as exc:
             self.get_logger().warn(f"Failed to publish debug image: {exc}")
+        publish_ms = self._elapsed_ms(publish_start)
+
+        self._publish_metrics(
+            image_msg,
+            {
+                "event": "processed",
+                "skipped": False,
+                "convert_ms": convert_ms,
+                "inference_ms": inference_ms,
+                "build_msg_ms": build_ms,
+                "draw_ms": draw_ms,
+                "publish_ms": publish_ms,
+                "total_ms": self._elapsed_ms(callback_start),
+                "cone_count": len(cone_array.cones),
+                "image_width": image_msg.width,
+                "image_height": image_msg.height,
+                "conf_threshold": self.conf_threshold,
+                "max_fps": self.max_fps,
+            },
+        )
 
     def draw_detections(self, image: np.ndarray, result) -> np.ndarray:
         boxes = getattr(result, "boxes", None)
@@ -258,6 +322,27 @@ class YoloDetectorNode(Node):
         if cone_color in (Cone.YELLOW_BIG, Cone.YELLOW_SMALL):
             return (0, 255, 255)
         return (180, 180, 180)
+
+    def _publish_metrics(self, image_msg: Image, payload: dict) -> None:
+        if self.metrics_pub is None:
+            return
+        msg = String()
+        payload = {
+            "component": "yolo",
+            "stamp": self._stamp_sec(image_msg),
+            "frame_id": image_msg.header.frame_id,
+            **payload,
+        }
+        msg.data = json.dumps(payload, sort_keys=True)
+        self.metrics_pub.publish(msg)
+
+    @staticmethod
+    def _stamp_sec(image_msg: Image) -> float:
+        return float(image_msg.header.stamp.sec) + float(image_msg.header.stamp.nanosec) * 1e-9
+
+    @staticmethod
+    def _elapsed_ms(start: float) -> float:
+        return (time.perf_counter() - start) * 1000.0
 
 
 def main(args=None) -> None:

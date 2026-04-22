@@ -1,11 +1,15 @@
 #include <Eigen/Dense> 
 
+#include <chrono>
+#include <iomanip>
 #include <rclcpp/rclcpp.hpp>
+#include <sstream>
 #include <message_filters/subscriber.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/synchronizer.h>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <opencv2/core/eigen.hpp>
+#include <std_msgs/msg/string.hpp>
 
 // --- 消息头文件 ---
 #include "drd25_msgs/msg/map.hpp" 
@@ -21,12 +25,28 @@ using namespace std::chrono_literals;
 
 namespace fs_fusion_box {
 
+namespace {
+using SteadyClock = std::chrono::steady_clock;
+
+double elapsed_ms(SteadyClock::time_point start, SteadyClock::time_point end = SteadyClock::now())
+{
+    return std::chrono::duration<double, std::milli>(end - start).count();
+}
+
+double stamp_to_sec(const std_msgs::msg::Header& header)
+{
+    return static_cast<double>(header.stamp.sec) + static_cast<double>(header.stamp.nanosec) * 1e-9;
+}
+}  // namespace
+
 class FusionNode : public rclcpp::Node {
 public:
     FusionNode() : Node("fusion_box_node") {
         // --- 核心参数 ---
         this->declare_parameter("sync_window", 0.1);
         this->declare_parameter("lidar_frame", "hesai_lidar"); 
+        this->declare_parameter("evaluation.enable_debug_metrics", false);
+        eval_metrics_enabled_ = this->get_parameter("evaluation.enable_debug_metrics").as_bool();
 
         // [强力测试参数] 吸铁石半径 (像素)
         // 只要雷达点投影在相机框中心 60 像素以内，强制上色！
@@ -48,6 +68,9 @@ public:
         // --- 初始化 ---
         marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("fusion/markers", 10);
         map_pub_ = this->create_publisher<drd25_msgs::msg::Map>("fusion/cones", 10);
+        if (eval_metrics_enabled_) {
+            metrics_pub_ = this->create_publisher<std_msgs::msg::String>("/perception/fusion/evaluation/metrics", 10);
+        }
 
         lidar_sub_.subscribe(this, "perception/lidar/cones_custom"); 
         camera_sub_.subscribe(this, "perception/camera/cones_custom"); 
@@ -73,7 +96,58 @@ private:
         const test_cone_segmentation::msg::ThreeDConeArray::ConstSharedPtr& custom_lidar_msg,
         const cone_interfaces::msg::ConeArray::ConstSharedPtr& custom_camera_msg) 
     {
+        const auto callback_start = SteadyClock::now();
+        double convert_3d_ms = 0.0;
+        double convert_2d_ms = 0.0;
+        double parameter_load_ms = 0.0;
+        double project_fuse_ms = 0.0;
+        double recover_ms = 0.0;
+        double magnet_ms = 0.0;
+        double publish_ms = 0.0;
+        int lidar_count = static_cast<int>(custom_lidar_msg->cones.size());
+        int camera_count = static_cast<int>(custom_camera_msg->cones.size());
+        int projected_count = 0;
+        int valid_projected_count = 0;
+        int fused_count = 0;
+        int recovered_count = 0;
+        int final_count = 0;
+        int unknown_count = 0;
+
+        auto publish_metrics = [&](const std::string& event) {
+            if (!eval_metrics_enabled_ || !metrics_pub_) return;
+
+            std_msgs::msg::String msg;
+            std::ostringstream out;
+            out << std::fixed << std::setprecision(9);
+            out << "{"
+                << "\"component\":\"fusion\""
+                << ",\"event\":\"" << event << "\""
+                << ",\"stamp\":" << stamp_to_sec(custom_lidar_msg->header)
+                << ",\"lidar_frame_id\":\"" << custom_lidar_msg->header.frame_id << "\""
+                << ",\"camera_frame_id\":\"" << custom_camera_msg->header.frame_id << "\""
+                << ",\"lidar_count\":" << lidar_count
+                << ",\"camera_count\":" << camera_count
+                << ",\"projected_count\":" << projected_count
+                << ",\"valid_projected_count\":" << valid_projected_count
+                << ",\"fused_count\":" << fused_count
+                << ",\"recovered_count\":" << recovered_count
+                << ",\"final_count\":" << final_count
+                << ",\"unknown_count\":" << unknown_count
+                << ",\"convert_3d_ms\":" << convert_3d_ms
+                << ",\"convert_2d_ms\":" << convert_2d_ms
+                << ",\"parameter_load_ms\":" << parameter_load_ms
+                << ",\"project_fuse_ms\":" << project_fuse_ms
+                << ",\"recover_ms\":" << recover_ms
+                << ",\"magnet_ms\":" << magnet_ms
+                << ",\"publish_ms\":" << publish_ms
+                << ",\"total_ms\":" << elapsed_ms(callback_start)
+                << "}";
+            msg.data = out.str();
+            metrics_pub_->publish(msg);
+        };
+
         // 1. 3D 数据转换
+        const auto convert_3d_start = SteadyClock::now();
         auto standard_lidar_msg = std::make_shared<vision_msgs::msg::Detection3DArray>();
         standard_lidar_msg->header = custom_lidar_msg->header;
         for (const auto& custom_cone : custom_lidar_msg->cones) {
@@ -82,8 +156,10 @@ private:
             det.bbox.size = custom_cone.size;
             standard_lidar_msg->detections.push_back(det);
         }
+        convert_3d_ms = elapsed_ms(convert_3d_start);
 
         // 2. 2D 数据转换
+        const auto convert_2d_start = SteadyClock::now();
         auto standard_camera_msg = std::make_shared<vision_msgs::msg::Detection2DArray>();
         standard_camera_msg->header = custom_camera_msg->header;
         for (const auto& box_2d : custom_camera_msg->cones) {
@@ -98,11 +174,17 @@ private:
             det.results.push_back(hyp);
             standard_camera_msg->detections.push_back(det);
         }
+        convert_2d_ms = elapsed_ms(convert_2d_start);
 
         // 3. 参数加载
+        const auto parameter_load_start = SteadyClock::now();
         CalibrationParams params;
         std::vector<double> matrix_data = this->get_parameter("lidar_to_camera_matrix").as_double_array();
-        if (matrix_data.size() != 16) return; 
+        if (matrix_data.size() != 16) {
+            parameter_load_ms = elapsed_ms(parameter_load_start);
+            publish_metrics("missing_calibration");
+            return;
+        }
         params.T_l2c = Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::RowMajor>>(matrix_data.data());
 
         params.img_w = this->get_parameter("image_width").as_int();
@@ -114,14 +196,25 @@ private:
         params.K.at<double>(1,2) = this->get_parameter("camera_matrix.cy").as_double();
         std::vector<double> dist = this->get_parameter("dist_coeffs").as_double_array();
         params.D = cv::Mat(dist).clone();
+        parameter_load_ms = elapsed_ms(parameter_load_start);
 
         // 4. 标准融合 (先试着正常匹配一下)
+        const auto project_fuse_start = SteadyClock::now();
         auto proj_boxes = project_3d_boxes_to_2d(standard_lidar_msg, params);
+        projected_count = static_cast<int>(proj_boxes.size());
+        for (const auto& box : proj_boxes) {
+            if (box.valid) valid_projected_count++;
+        }
         auto fusion_result = fuse_measurements(proj_boxes, standard_lidar_msg, standard_camera_msg);
+        fused_count = static_cast<int>(fusion_result.fused_cones.size());
+        project_fuse_ms = elapsed_ms(project_fuse_start);
 
         // 5. 补全 (检测远距离)
         // 这一步生成纯视觉锥筒，保持远距离检测能力
+        const auto recover_start = SteadyClock::now();
         auto recovered_cones = recover_missing_cones(fusion_result.unmatched_camera_indices, standard_camera_msg, params);
+        recovered_count = static_cast<int>(recovered_cones.size());
+        recover_ms = elapsed_ms(recover_start);
 
         // ==========================================
         // [新增] 强力吸铁石：修复近处灰色圆柱
@@ -130,6 +223,7 @@ private:
         std::vector<drd25_msgs::msg::Cone>& current_cones = fusion_result.fused_cones;
 
         // 遍历所有已经是“灰色(Unknown)”的雷达锥筒
+        const auto magnet_start = SteadyClock::now();
         for (size_t i = 0; i < current_cones.size(); ++i) {
             // 如果颜色未知 (Color == 4 或其他定义为灰色的值)
             // drd25_msgs/Cone 定义: 0=Blue, 1=Red, 2=Yellow, 3=BigOrange, 4=Unknown
@@ -175,17 +269,25 @@ private:
                 }
             }
         }
+        magnet_ms = elapsed_ms(magnet_start);
 
         // 7. 合并与发布
         std::vector<drd25_msgs::msg::Cone> final_cones = fusion_result.fused_cones;
         final_cones.insert(final_cones.end(), recovered_cones.begin(), recovered_cones.end());
+        final_count = static_cast<int>(final_cones.size());
+        for (const auto& cone : final_cones) {
+            if (cone.color == drd25_msgs::msg::Cone::UNKNOWN) unknown_count++;
+        }
 
+        const auto publish_start = SteadyClock::now();
         drd25_msgs::msg::Map map_msg;
         map_msg.header = custom_lidar_msg->header;
         map_msg.track = final_cones; 
         map_pub_->publish(map_msg);
 
         publish_markers(final_cones, custom_lidar_msg->header);
+        publish_ms = elapsed_ms(publish_start);
+        publish_metrics("processed");
     }
 
     void publish_markers(const std::vector<drd25_msgs::msg::Cone>& cones, const std_msgs::msg::Header& header) {
@@ -225,10 +327,12 @@ private:
 
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
     rclcpp::Publisher<drd25_msgs::msg::Map>::SharedPtr map_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr metrics_pub_;
     message_filters::Subscriber<test_cone_segmentation::msg::ThreeDConeArray> lidar_sub_;
     message_filters::Subscriber<cone_interfaces::msg::ConeArray> camera_sub_;
     std::shared_ptr<message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<
         test_cone_segmentation::msg::ThreeDConeArray, cone_interfaces::msg::ConeArray>>> sync_;
+    bool eval_metrics_enabled_ = false;
 };
 
 } 

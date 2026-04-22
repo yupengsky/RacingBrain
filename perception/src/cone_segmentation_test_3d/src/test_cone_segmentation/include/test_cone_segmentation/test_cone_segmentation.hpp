@@ -6,6 +6,7 @@
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <std_msgs/msg/header.hpp>
+#include <std_msgs/msg/string.hpp>
 
 // [关键] 引入刚才编译成功的自定义消息头文件
 // ROS 2 会自动把 .msg 文件名转成下划线风格的 .hpp
@@ -104,8 +105,10 @@ private:
     
     // [关键] 自定义消息发布者
     rclcpp::Publisher<test_cone_segmentation::msg::ThreeDConeArray>::SharedPtr custom_cones_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr metrics_pub_;
 
     ConeSegmentationCFG cfg_;
+    bool eval_metrics_enabled_ = false;
 };
 
 #endif // TEST_CONE_SEGMENTATION_HPP

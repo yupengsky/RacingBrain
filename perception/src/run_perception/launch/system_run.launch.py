@@ -2,9 +2,11 @@ import os
 from configparser import ConfigParser
 from pathlib import Path
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.substitutions import LaunchConfiguration
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
 
 
@@ -42,6 +44,7 @@ def configured_path(parser, section, option):
     return str(path)
 
 def generate_launch_description():
+    eval_debug = LaunchConfiguration('eval_debug')
     
     # ==========================================
     # 1. 配置 2D YOLO 节点
@@ -62,7 +65,8 @@ def generate_launch_description():
             'model_path': model_path,
             'image_topic': '/camera1/image_raw',  # 你指定的相机话题
             'conf_threshold': 0.5,
-            'max_fps': 10.0
+            'max_fps': 10.0,
+            'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool)
         }]
     )
 
@@ -76,7 +80,8 @@ def generate_launch_description():
         name='cone_segmentation_node',
         output='screen',
         parameters=[{
-            'use_csf': False   # 关闭 CSF
+            'use_csf': False,   # 关闭 CSF
+            'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool)
         }]
     )
 
@@ -89,7 +94,8 @@ def generate_launch_description():
         fusion_launch_path = os.path.join(fusion_pkg_share, 'launch', 'fusion_box.launch.py')
         
         fusion_launch = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(fusion_launch_path)
+            PythonLaunchDescriptionSource(fusion_launch_path),
+            launch_arguments={'eval_debug': eval_debug}.items()
         )
     except Exception as e:
         print(f"Error: 找不到 fs_fusion_box 功能包。请确保它已编译并 source。错误信息: {e}")
@@ -99,6 +105,12 @@ def generate_launch_description():
     # 4. 组合启动
     # ==========================================
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'eval_debug',
+            default_value='false',
+            description='Enable sidecar evaluation metrics publishers in perception nodes.'
+        ),
+
         # 1. 启动 YOLO
         yolo_node,
         

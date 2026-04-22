@@ -10,10 +10,9 @@ demo execution.
 ./scripts/run_dataset_slam_eval.sh
 ```
 
-The script launches the existing perception stack, launches `slam_node` with
-`eval_debug:=true`, plays the configured rosbag, and runs a separate monitor process.
-Normal runs through `./scripts/run_dataset_slam_chain.sh` keep evaluation debug output
-disabled.
+The script launches the existing perception stack and `slam_node` with `eval_debug:=true`,
+plays the configured rosbag, and runs a separate monitor process. Normal runs through
+`./scripts/run_dataset_slam_chain.sh` keep evaluation debug output disabled.
 
 Useful overrides:
 
@@ -37,6 +36,8 @@ Important artifacts:
 - `report.md`: human-readable report.
 - `topic_rates.csv`: topic counts and observed rates.
 - `latency.csv`: header-stamp deltas between adjacent stages.
+- `processing_times.csv`: per-frame processing-time JSON from YOLO, LiDAR clustering,
+  fusion, and SLAM when evaluation debug is enabled.
 - `fusion_frames.csv`: per-frame fused cone counts, colors, unknown ratio, and duplicate risk.
 - `map_frames.csv`: per-frame stable global map counts and nearest-neighbor statistics.
 - `odom.csv`: local trajectory samples and cumulative odometry length.

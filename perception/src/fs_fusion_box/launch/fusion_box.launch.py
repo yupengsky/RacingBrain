@@ -1,9 +1,13 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
+    eval_debug = LaunchConfiguration('eval_debug')
     
     # 找到 yaml 文件的路径
     config_file = os.path.join(
@@ -13,12 +17,20 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'eval_debug',
+            default_value='false',
+            description='Enable sidecar evaluation metrics publisher in fusion node.'
+        ),
         Node(
             package='fs_fusion_box',
             executable='fusion_box_node',
             name='fusion_box_node',
             output='screen',
-            parameters=[config_file], 
+            parameters=[
+                config_file,
+                {'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool)}
+            ],
             
             # [关键修改]
             remappings=[
