@@ -3,6 +3,7 @@ from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
 import os
 
@@ -11,6 +12,7 @@ def launch_setup(context):
 
     track = LaunchConfiguration("track").perform(context)
     rviz = LaunchConfiguration("rviz")
+    eval_debug = LaunchConfiguration("eval_debug")
 
     pkg_share = get_package_share_directory("slam")
 
@@ -23,7 +25,13 @@ def launch_setup(context):
         executable="slam_node",
         name="slam_processor",
         output="screen",
-        parameters=[base_params, track_params]
+        parameters=[
+            base_params,
+            track_params,
+            {
+                "evaluation.enable_debug_metrics": ParameterValue(eval_debug, value_type=bool),
+            },
+        ]
     )
 
     rviz_node = Node(
@@ -55,6 +63,12 @@ def generate_launch_description():
             "rviz",
             default_value="true",
             description="Launch RViz2"
+        ),
+
+        DeclareLaunchArgument(
+            "eval_debug",
+            default_value="false",
+            description="Publish lightweight SLAM evaluation metrics"
         ),
 
         OpaqueFunction(function=launch_setup)

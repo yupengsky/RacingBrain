@@ -25,6 +25,16 @@ cd /home/yupeng/GitHub/DRd26_SLAM
 ./scripts/run_dataset_slam_chain.sh
 ```
 
+## 一键量化评估链路
+
+```bash
+cd /home/yupeng/GitHub/DRd26_SLAM
+./scripts/run_dataset_slam_eval.sh
+```
+
+默认输出到 `log/eval/dataset_slam_eval_时间戳/`，包含 `summary.json`、
+`report.md`、CSV 明细和 `plots/` 图表。正常演示链路不会开启评估诊断。
+
 ## 重新构建
 
 ```bash

@@ -5,6 +5,8 @@
 #include <atomic>
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
+#include <sstream>
 #include <Eigen/Dense>
 #include <proj.h>
 #include "rclcpp/rclcpp.hpp"   
@@ -25,6 +27,7 @@
 #include "visualization_msgs/msg/marker_array.hpp" 
 #include <nav_msgs/msg/path.hpp>     
 #include <nav_msgs/msg/odometry.hpp>    
+#include <std_msgs/msg/string.hpp>
 // 回环检测器
 #include "slam/loop_closure_detector.hpp"
 
@@ -79,6 +82,9 @@ public:
         tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);       //广播坐标变换
         path_pub_ = this->create_publisher<nav_msgs::msg::Path>("vehicle_path", 10);
         odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("vehicle_odom", 10); 
+        if (eval_metrics_enabled_) {
+            eval_metrics_pub_ = this->create_publisher<std_msgs::msg::String>("/slam/evaluation/metrics", 10);
+        }
         path_msg_.header.frame_id = sys_.map_frame;
         // ****************** 订阅与发布 ******************
 
@@ -101,6 +107,21 @@ private:
         double vel_n = 0.0;
         Eigen::Matrix3d R_vehicle = Eigen::Matrix3d::Identity();
         Eigen::Matrix4d T_veh_to_map = Eigen::Matrix4d::Identity();
+    };
+
+    struct EvaluationFrameStats {
+        long long frame_index = 0;
+        int observations_total = 0;
+        int observations_used = 0;
+        int observations_unknown = 0;
+        int matched_cones = 0;
+        int created_cones = 0;
+        int removed_cones = 0;
+        int missed_in_view = 0;
+        int rejected_locked = 0;
+        int rejected_roi = 0;
+        int total_tracked = 0;
+        int stable_cones = 0;
     };
 
     // 定义系统参数（基本不会变的参数）
@@ -225,6 +246,10 @@ private:
         params_.max_tube_length = this->get_parameter("mapping.max_tube_length").as_double();
         params_.max_straight_angular = this->get_parameter("mapping.max_straight_angular").as_double();
 
+        // 评估诊断默认关闭；离线评估脚本可通过 launch 参数临时打开。
+        this->declare_parameter("evaluation.enable_debug_metrics", false);
+        eval_metrics_enabled_ = this->get_parameter("evaluation.enable_debug_metrics").as_bool();
+
         // 回环检测器参数加载
         this->declare_parameter("loop_closure.distance_threshold", 1.5);
         this->declare_parameter("loop_closure.approach_angle_threshold", 35.0);
@@ -285,6 +310,7 @@ private:
         //  *********************** 建图 ***********************
         // 保证在当前代码块内独占访问 cone_map_，防止多线程数据竞争和崩溃
         std::lock_guard<std::mutex> lock(map_mutex_);
+        resetEvaluationFrameStats(map_msg->track.size());
 
         // 每一帧建图开始前，先把所有锥桶标记为未匹配
         resetFrameMatches();
@@ -441,8 +467,10 @@ private:
 
         for (const auto &cone_obs : map_msg.track) {
             if (cone_obs.color == drd25_msgs::msg::Cone::UNKNOWN) {
+                eval_stats_.observations_unknown++;
                 continue;
             }
+            eval_stats_.observations_used++;
 
             Eigen::Vector4d p_lidar(cone_obs.x, cone_obs.y, 0.0, 1.0);
             Eigen::Vector4d p_global = T_lidar_to_map * p_lidar;
@@ -462,6 +490,7 @@ private:
             bool in_view = isInFieldOfView(it->pos, historical_T_veh_to_map);
             if (in_view && !it->matched_this_frame) {
                 it->existence_score += params_.l_miss;
+                eval_stats_.missed_in_view++;
             }
 
             bool should_remove = remove_on_equal_min
@@ -470,6 +499,7 @@ private:
 
             if (should_remove) {
                 it = cone_map_.erase(it);
+                eval_stats_.removed_cones++;
             } else {
                 it->is_stable = (it->existence_score > params_.l_stable);
                 ++it;
@@ -696,16 +726,21 @@ private:
             best_match->existence_score = std::min(best_match->existence_score, params_.l_max);
             // 如果存在概率大于稳定阈值，is_stable = True
             best_match->is_stable = (best_match->existence_score > params_.l_stable);
+            eval_stats_.matched_cones++;
         }
         // *************** 执行卡尔曼更新 ***************
 
         // **************** 新锥桶初始化 ****************
         else {
             // 如果已经锁图，不添加新锥桶
-            if (map_locked_) return;
+            if (map_locked_) {
+                eval_stats_.rejected_locked++;
+                return;
+            }
 
             // 如果在阿克曼ROI之外，不添加
             if (!isInAckermannTube(cone_x, cone_y)){
+                eval_stats_.rejected_roi++;
                 return;
             }
 
@@ -724,6 +759,7 @@ private:
 
             // 添加新的锥桶
             cone_map_.push_back(new_cone);
+            eval_stats_.created_cones++;
             //记录新创建的锥桶候选点
             RCLCPP_INFO(this->get_logger(), "New Cone [ID:%d] at (%.2f, %.2f)", 
                 new_cone.id, z.x(), z.y());
@@ -789,13 +825,53 @@ private:
             map_msg.markers.push_back(m);
             published_count++;
         }
+        eval_stats_.total_tracked = static_cast<int>(cone_map_.size());
+        eval_stats_.stable_cones = published_count;
         // ************** 视觉渲染 **************
     
         global_map_pub_->publish(map_msg);
+        publishEvaluationMetrics(stamp);
     
         // 打印当前跟踪总量和已确认稳定的数量
         RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000, 
         "Map Status: Total Tracked: %ld | Confirmed Stable: %d", cone_map_.size(), published_count);
+    }
+
+    void resetEvaluationFrameStats(size_t observation_count) {
+        eval_stats_ = EvaluationFrameStats{};
+        eval_stats_.frame_index = ++eval_frame_index_;
+        eval_stats_.observations_total = static_cast<int>(observation_count);
+    }
+
+    void publishEvaluationMetrics(const builtin_interfaces::msg::Time& stamp) {
+        if (!eval_metrics_enabled_ || !eval_metrics_pub_) return;
+
+        std_msgs::msg::String msg;
+        std::ostringstream out;
+        const double stamp_sec = static_cast<double>(stamp.sec) + static_cast<double>(stamp.nanosec) * 1e-9;
+        out << std::fixed << std::setprecision(9);
+        out << "{"
+            << "\"stamp\":" << stamp_sec
+            << ",\"frame_index\":" << eval_stats_.frame_index
+            << ",\"track_type\":\"" << track_type_str_ << "\""
+            << ",\"observations_total\":" << eval_stats_.observations_total
+            << ",\"observations_used\":" << eval_stats_.observations_used
+            << ",\"observations_unknown\":" << eval_stats_.observations_unknown
+            << ",\"matched_cones\":" << eval_stats_.matched_cones
+            << ",\"created_cones\":" << eval_stats_.created_cones
+            << ",\"removed_cones\":" << eval_stats_.removed_cones
+            << ",\"missed_in_view\":" << eval_stats_.missed_in_view
+            << ",\"rejected_locked\":" << eval_stats_.rejected_locked
+            << ",\"rejected_roi\":" << eval_stats_.rejected_roi
+            << ",\"total_tracked\":" << eval_stats_.total_tracked
+            << ",\"stable_cones\":" << eval_stats_.stable_cones
+            << ",\"map_locked\":" << (map_locked_ ? "true" : "false")
+            << ",\"lap_count\":" << lap_count_
+            << ",\"speed\":" << current_speed_
+            << ",\"gyro_z\":" << current_gyro_z_
+            << "}";
+        msg.data = out.str();
+        eval_metrics_pub_->publish(msg);
     }
     // ************************************ 工具函数 ************************************
 
@@ -809,6 +885,9 @@ private:
     long long next_cone_id_ = 0; // 全局 ID 计数器
     int lap_count_ = 0;     // 记录车辆行驶了多少圈
     std::atomic<bool> map_locked_{false};       //地图锁
+    bool eval_metrics_enabled_ = false;
+    long long eval_frame_index_ = 0;
+    EvaluationFrameStats eval_stats_;
 
     Eigen::Matrix4d T_veh_to_map_ = Eigen::Matrix4d::Identity();
     Eigen::Matrix4d T_l2v_ = Eigen::Matrix4d::Identity();           //雷达外参
@@ -830,6 +909,7 @@ private:
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr global_map_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr eval_metrics_pub_;
     nav_msgs::msg::Path path_msg_;
 };
 

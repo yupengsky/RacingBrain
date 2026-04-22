@@ -9,6 +9,7 @@ endif()
 # 查找ros2依赖包
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -42,6 +43,7 @@ target_include_directories(slam_node PUBLIC
 # 链接ros依赖
 ament_target_dependencies(slam_node
   rclcpp
+  std_msgs
   tf2
   tf2_ros
   tf2_geometry_msgs
