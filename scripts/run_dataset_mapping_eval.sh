@@ -172,6 +172,7 @@ if [[ "${FAULT_PROFILE}" == "fusion_calibration_bias" ]]; then
 fi
 
 export \
+  MAPPING_GATE \
   FAULT_PROFILE \
   FAULT_START_SEC \
   FAULT_DURATION_SEC \
@@ -208,6 +209,7 @@ import sys
 
 scenario = {
     "profile": os.environ["FAULT_PROFILE"],
+    "mapping_gate": os.environ.get("MAPPING_GATE", "true").lower() == "true",
     "fault_start_sec": float(os.environ["FAULT_START_SEC"]),
     "fault_duration_sec": float(os.environ["FAULT_DURATION_SEC"]),
     "use_fault_injector": os.environ["USE_FAULT_INJECTOR"].lower() == "true",

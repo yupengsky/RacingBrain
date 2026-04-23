@@ -164,6 +164,17 @@ stamp offset, projection residual, low-IoU ratio, consistency score, and
 calibration-drift score. These are designed to turn replay degradation into
 inspectable evidence before adding automatic fallback logic.
 
+Mapping-gate ablations can be run on the same replay slice:
+
+```bash
+SCENARIOS="none camera_blank" GATE_VARIANTS="true false" \
+  ./scripts/run_dataset_fault_benchmark.sh
+```
+
+The generated `mapping_gate_comparison.csv` reports whether the risk-aware gate
+reduces map pollution: candidate residue, duplicate pairs, unstable cone
+creation, and the replay stability score.
+
 ## Function Entrypoints
 
 RacingBrain exposes composable function folders under `LocalizationMapping/RacingBrain/racingbrain`:

@@ -64,6 +64,18 @@ SCENARIOS="none camera_blank camera_blur fusion_calibration_bias" \
 This wrapper creates one evaluation directory per scenario plus a top-level
 `benchmark_summary.csv` and `benchmark_report.md`.
 
+To compare the risk-aware mapping gate against the ungated mapper, run:
+
+```bash
+SCENARIOS="none camera_blank" GATE_VARIANTS="true false" \
+  ./scripts/run_dataset_fault_benchmark.sh
+```
+
+The wrapper then creates per-scenario `mapping_gate_true` and
+`mapping_gate_false` folders and writes `mapping_gate_comparison.csv` with
+on-minus-off deltas for stable cones, duplicate pairs, candidate residue, and
+map-stability score.
+
 ## Outputs
 
 Each run writes to:
@@ -88,6 +100,9 @@ Important artifacts:
 - `mapping_debug_frames.csv`: optional mapping-node counters from `/slam/evaluation/metrics`.
   This includes risk-gate state, rejected new cones, and downweighted observations
   when risk-aware mapping is enabled.
+- `summary.json.map_pollution`: candidate-residue, stable-creation, removal-churn,
+  UNKNOWN-observation, duplicate-density, and gate-action metrics for judging
+  whether degraded perception is polluting the global cone map.
 - `system_health.csv`: unified online health snapshots from `/racingbrain/health/system`.
 - `perception_failure_state.csv`: online perception failure decisions and active LiDAR backend.
 - `scenario.json`: replay fault configuration for the current run.

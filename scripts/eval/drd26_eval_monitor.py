@@ -172,6 +172,12 @@ def summarize_component_metrics(rows: Iterable[Dict[str, Any]], component: str, 
     return {key: summarize(values) for key, values in grouped.items()}
 
 
+def ratio_or_none(numerator: float, denominator: float) -> Optional[float]:
+    if denominator <= 0.0:
+        return None
+    return numerator / denominator
+
+
 class TopicStats:
     def __init__(self) -> None:
         self.count = 0
@@ -622,6 +628,28 @@ class EvalMonitor(Node):
                 self.odom_final[1] - self.odom_start[1],
             )
 
+        mapping_debug_frames = len(self.mapping_debug_rows)
+        created_cones_total = sum(int(r.get("created_cones", 0)) for r in self.mapping_debug_rows)
+        matched_cones_total = sum(int(r.get("matched_cones", 0)) for r in self.mapping_debug_rows)
+        removed_cones_total = sum(int(r.get("removed_cones", 0)) for r in self.mapping_debug_rows)
+        unknown_observations_total = sum(int(r.get("observations_unknown", 0)) for r in self.mapping_debug_rows)
+        rejected_risk_gate_total = sum(int(r.get("rejected_risk_gate", 0)) for r in self.mapping_debug_rows)
+        risk_gate_downweighted_total = sum(
+            int(r.get("risk_gate_downweighted_observations", 0)) for r in self.mapping_debug_rows
+        )
+        observation_events_total = created_cones_total + matched_cones_total + unknown_observations_total
+        final_stable_cones = len(self.final_map_points)
+        candidate_residue = max(0, created_cones_total - final_stable_cones)
+        stable_creation_ratio = ratio_or_none(float(final_stable_cones), float(created_cones_total))
+        map_stability_score = None
+        if stable_creation_ratio is not None:
+            map_stability_score = max(
+                0.0,
+                stable_creation_ratio
+                - 0.04 * float(final_duplicate_pairs)
+                - 0.02 * float(removed_cones_total),
+            )
+
         return {
             "success": (
                 topic_summaries.get("/perception/fusion/map", {}).get("count", 0) > 0
@@ -664,7 +692,7 @@ class EvalMonitor(Node):
             },
             "map": {
                 "stable_cones_per_frame": summarize(self.global_counts),
-                "final_stable_cones": len(self.final_map_points),
+                "final_stable_cones": final_stable_cones,
                 "final_duplicate_pairs": final_duplicate_pairs,
                 "final_nearest_neighbor_m": summarize(final_nnd),
                 "final_bounds": point_bounds(self.final_map_points),
@@ -678,16 +706,28 @@ class EvalMonitor(Node):
             },
             "mapping_debug": {
                 "enabled": bool(self.mapping_debug_rows),
-                "frames": len(self.mapping_debug_rows),
-                "created_cones_total": sum(int(r.get("created_cones", 0)) for r in self.mapping_debug_rows),
-                "matched_cones_total": sum(int(r.get("matched_cones", 0)) for r in self.mapping_debug_rows),
-                "removed_cones_total": sum(int(r.get("removed_cones", 0)) for r in self.mapping_debug_rows),
+                "frames": mapping_debug_frames,
+                "created_cones_total": created_cones_total,
+                "matched_cones_total": matched_cones_total,
+                "removed_cones_total": removed_cones_total,
                 "missed_in_view_total": sum(int(r.get("missed_in_view", 0)) for r in self.mapping_debug_rows),
-                "unknown_observations_total": sum(int(r.get("observations_unknown", 0)) for r in self.mapping_debug_rows),
-                "rejected_risk_gate_total": sum(int(r.get("rejected_risk_gate", 0)) for r in self.mapping_debug_rows),
-                "risk_gate_downweighted_total": sum(int(r.get("risk_gate_downweighted_observations", 0)) for r in self.mapping_debug_rows),
+                "unknown_observations_total": unknown_observations_total,
+                "rejected_risk_gate_total": rejected_risk_gate_total,
+                "risk_gate_downweighted_total": risk_gate_downweighted_total,
                 "risk_gate_state_counts": dict(Counter(str(r.get("risk_gate_state")) for r in self.mapping_debug_rows if r.get("risk_gate_state") is not None)),
                 "last": self.mapping_debug_rows[-1] if self.mapping_debug_rows else None,
+            },
+            "map_pollution": {
+                "created_cones_total": created_cones_total,
+                "candidate_residue_total": candidate_residue,
+                "candidate_residue_per_frame": ratio_or_none(float(candidate_residue), float(mapping_debug_frames)),
+                "stable_creation_ratio": stable_creation_ratio,
+                "removal_churn_ratio": ratio_or_none(float(removed_cones_total), float(created_cones_total)),
+                "unknown_observation_ratio": ratio_or_none(float(unknown_observations_total), float(observation_events_total)),
+                "final_duplicate_density": ratio_or_none(float(final_duplicate_pairs), float(final_stable_cones)),
+                "risk_gate_rejected_new_cones": rejected_risk_gate_total,
+                "risk_gate_downweighted_observations": risk_gate_downweighted_total,
+                "map_stability_score": map_stability_score,
             },
             "system_health": {
                 "frames": len(self.health_rows),
@@ -758,6 +798,7 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
     scenario = summary.get("scenario", {}) or {}
     perception = summary.get("perception", {})
     map_metrics = summary.get("map", {})
+    map_pollution = summary.get("map_pollution", {})
     trajectory = summary.get("trajectory", {})
     mapping_debug = summary.get("mapping_debug", {})
     system_health = summary.get("system_health", {})
@@ -871,6 +912,18 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
             f"- Final duplicate pairs: `{map_metrics.get('final_duplicate_pairs')}`",
             f"- Final nearest-neighbor mean: `{fmt(map_metrics.get('final_nearest_neighbor_m', {}).get('mean'))} m`",
             f"- Final color counts: `{json.dumps(map_metrics.get('final_color_counts', {}), ensure_ascii=False)}`",
+            "",
+            "## Map Pollution",
+            "",
+            f"- Candidate residue total: `{map_pollution.get('candidate_residue_total')}`",
+            f"- Candidate residue/frame: `{fmt(map_pollution.get('candidate_residue_per_frame'))}`",
+            f"- Stable creation ratio: `{fmt(map_pollution.get('stable_creation_ratio'))}`",
+            f"- Removal churn ratio: `{fmt(map_pollution.get('removal_churn_ratio'))}`",
+            f"- UNKNOWN observation ratio: `{fmt(map_pollution.get('unknown_observation_ratio'))}`",
+            f"- Final duplicate density: `{fmt(map_pollution.get('final_duplicate_density'))}`",
+            f"- Risk-gate rejected new cones: `{map_pollution.get('risk_gate_rejected_new_cones')}`",
+            f"- Risk-gate downweighted observations: `{map_pollution.get('risk_gate_downweighted_observations')}`",
+            f"- Map stability score: `{fmt(map_pollution.get('map_stability_score'))}`",
             "",
             "## Trajectory",
             "",
