@@ -232,6 +232,17 @@ The mapper publishes map layers with different confidence semantics:
 This keeps the planning-facing map conservative while still exposing the
 candidate and rejection evidence needed for replay analysis and debugging.
 
+When `enable_planning:=true`, RacingBrain starts a lightweight planning
+interface that converts the stable cone map into a sparse track graph:
+
+```text
+/planning/track_graph              boundary pairs and centerline preview
+/racingbrain/planning/input_state  JSON status for downstream planners
+```
+
+The node pairs blue cones with red/yellow cones, publishes a centerline preview,
+and reports whether enough paired boundary points exist for a planner to consume.
+
 ## Tech Stack
 
 - ROS 2 Humble

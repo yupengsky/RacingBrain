@@ -1,5 +1,6 @@
 from launch.actions import LogInfo
 from launch.conditions import IfCondition
+from launch_ros.actions import Node
 
 
 def launch_actions(enabled=None):
@@ -7,9 +8,15 @@ def launch_actions(enabled=None):
     return [
         LogInfo(
             msg=(
-                "RacingBrain planner hook is reserved. "
-                "Add planner launch actions here when the planning module is ready."
+                "RacingBrain planning interface enabled: extracting sparse track graph from /global_map."
             ),
             condition=condition,
-        )
+        ),
+        Node(
+            package="racingbrain",
+            executable="track_graph_builder",
+            name="track_graph_builder",
+            output="screen",
+            condition=condition,
+        ),
     ]

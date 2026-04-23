@@ -1,15 +1,18 @@
 # Planning Function
 
-Reserved for the future planner.
+This function starts the planning-facing interface for RacingBrain. It does not
+run the final racing planner yet; it extracts a sparse track graph from the
+stable cone map so later planning code can consume a small, inspectable input.
 
-The public localization and mapping entry point already exposes:
+The public localization and mapping entry point exposes:
 
 ```bash
-enable_planning:=false
+enable_planning:=true
 ```
 
-When the planner code is ready, add its launch action in:
+Outputs:
 
 ```text
-RacingBrain/racingbrain/LocalizationMapping/functions/Planning/function.py
+/planning/track_graph
+/racingbrain/planning/input_state
 ```

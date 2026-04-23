@@ -250,6 +250,7 @@ class EvalMonitor(Node):
         self.mapping_debug_rows: List[Dict[str, Any]] = []
         self.health_rows: List[Dict[str, Any]] = []
         self.failure_state_rows: List[Dict[str, Any]] = []
+        self.planning_state_rows: List[Dict[str, Any]] = []
         self.timing_rows: List[Dict[str, Any]] = []
 
         self.yolo_counts: List[int] = []
@@ -259,6 +260,7 @@ class EvalMonitor(Node):
         self.global_counts: List[int] = []
         self.candidate_layer_counts: List[int] = []
         self.rejected_observation_counts: List[int] = []
+        self.track_graph_marker_counts: List[int] = []
         self.gnss_speeds: List[float] = []
         self.odom_speeds: List[float] = []
         self.final_map_points: List[Tuple[float, float]] = []
@@ -290,6 +292,8 @@ class EvalMonitor(Node):
         self.create_subscription(String, "/slam/evaluation/metrics", self.cb_mapping_debug, 10)
         self.create_subscription(String, "/racingbrain/health/system", self.cb_system_health, 10)
         self.create_subscription(String, "/racingbrain/perception/failure_state", self.cb_failure_state, 10)
+        self.create_subscription(MarkerArray, "/planning/track_graph", self.cb_track_graph, 10)
+        self.create_subscription(String, "/racingbrain/planning/input_state", self.cb_planning_state, 10)
 
     def mark(self, topic: str, stamp: Optional[float], extra: Optional[Dict[str, Any]] = None) -> None:
         now = time.time()
@@ -478,6 +482,11 @@ class EvalMonitor(Node):
         self.rejected_observation_counts.append(count)
         self.mark("/mapping/rejected_observations", stamp, {"rejected_observation_count": count})
 
+    def cb_track_graph(self, msg: MarkerArray) -> None:
+        stamp, count = self.marker_layer_count(msg)
+        self.track_graph_marker_counts.append(count)
+        self.mark("/planning/track_graph", stamp, {"track_graph_marker_count": count})
+
     def cb_odom(self, msg: Odometry) -> None:
         stamp = msg_stamp(msg)
         x = float(msg.pose.pose.position.x)
@@ -622,6 +631,31 @@ class EvalMonitor(Node):
         if bool(data.get("primary_available")) or bool(data.get("fallback_available")):
             self.last_live_failure_state = data
         self.mark("/racingbrain/perception/failure_state", stamp, row)
+
+    def cb_planning_state(self, msg: String) -> None:
+        now = time.time()
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError:
+            data = {"raw": msg.data}
+
+        stamp_raw = data.get("stamp")
+        try:
+            stamp = float(stamp_raw) if stamp_raw is not None else None
+        except (TypeError, ValueError):
+            stamp = None
+
+        row = {
+            "elapsed_wall_sec": now - self.start_wall,
+            "stamp": stamp,
+            "ready": data.get("ready"),
+            "left_boundary_count": data.get("left_boundary_count"),
+            "right_boundary_count": data.get("right_boundary_count"),
+            "paired_boundary_count": data.get("paired_boundary_count"),
+            "centerline_count": data.get("centerline_count"),
+        }
+        self.planning_state_rows.append(row)
+        self.mark("/racingbrain/planning/input_state", stamp, row)
 
     @staticmethod
     def marker_color_name(marker: Marker) -> str:
@@ -775,6 +809,12 @@ class EvalMonitor(Node):
                 "last": self.last_failure_state,
                 "last_live": self.last_live_failure_state,
             },
+            "planning": {
+                "frames": len(self.planning_state_rows),
+                "ready_counts": dict(Counter(str(r.get("ready")) for r in self.planning_state_rows if r.get("ready") is not None)),
+                "track_graph_markers_per_frame": summarize(self.track_graph_marker_counts),
+                "last": self.planning_state_rows[-1] if self.planning_state_rows else None,
+            },
         }
 
 
@@ -837,6 +877,7 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
     mapping_debug = summary.get("mapping_debug", {})
     system_health = summary.get("system_health", {})
     perception_failure = summary.get("perception_failure", {})
+    planning = summary.get("planning", {})
     live_failure = perception_failure.get("last_live") or perception_failure.get("last") or {}
     processing_time = summary.get("processing_time_ms", {})
     fusion_consistency = summary.get("fusion_consistency", {})
@@ -918,6 +959,13 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
             f"- Learning-failed counts: `{json.dumps(perception_failure.get('learning_failed_counts', {}), ensure_ascii=False)}`",
             f"- Last live active backend: `{live_failure.get('active_lidar_backend')}`",
             f"- Last live failure reasons: `{json.dumps(live_failure.get('failure_reasons', []), ensure_ascii=False)}`",
+            "",
+            "## Planning Interface",
+            "",
+            f"- Planning frames: `{planning.get('frames')}`",
+            f"- Ready counts: `{json.dumps(planning.get('ready_counts', {}), ensure_ascii=False)}`",
+            f"- Last centerline count: `{(planning.get('last') or {}).get('centerline_count')}`",
+            f"- Last paired boundary count: `{(planning.get('last') or {}).get('paired_boundary_count')}`",
             "",
             "## Processing Time",
             "",
@@ -1152,6 +1200,7 @@ def main() -> int:
         write_csv(log_dir / "mapping_debug_frames.csv", monitor.mapping_debug_rows)
         write_csv(log_dir / "system_health.csv", monitor.health_rows)
         write_csv(log_dir / "perception_failure_state.csv", monitor.failure_state_rows)
+        write_csv(log_dir / "planning_state.csv", monitor.planning_state_rows)
         write_csv(log_dir / "processing_times.csv", monitor.timing_rows)
         write_report(log_dir, summary)
         maybe_write_plots(log_dir, monitor)

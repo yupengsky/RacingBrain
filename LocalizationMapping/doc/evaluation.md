@@ -109,6 +109,8 @@ Important artifacts:
   whether degraded perception is polluting the global cone map.
 - `system_health.csv`: unified online health snapshots from `/racingbrain/health/system`.
 - `perception_failure_state.csv`: online perception failure decisions and active LiDAR backend.
+- `planning_state.csv`: optional sparse-track-graph readiness snapshots when
+  `ENABLE_PLANNING=true` is used during replay.
 - `scenario.json`: replay fault configuration for the current run.
 - `fault_injector_stats.json`: shadow-topic replay counts for injected scenarios.
 - `plots/`: quick-look charts when matplotlib is available.
