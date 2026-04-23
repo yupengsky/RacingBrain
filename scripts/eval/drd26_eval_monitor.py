@@ -243,6 +243,7 @@ class EvalMonitor(Node):
         self.odom_rows: List[Dict[str, Any]] = []
         self.mapping_debug_rows: List[Dict[str, Any]] = []
         self.health_rows: List[Dict[str, Any]] = []
+        self.failure_state_rows: List[Dict[str, Any]] = []
         self.timing_rows: List[Dict[str, Any]] = []
 
         self.yolo_counts: List[int] = []
@@ -256,6 +257,8 @@ class EvalMonitor(Node):
         self.final_map_color_counts: Counter[str] = Counter()
         self.last_system_health: Optional[Dict[str, Any]] = None
         self.last_non_stale_system_health: Optional[Dict[str, Any]] = None
+        self.last_failure_state: Optional[Dict[str, Any]] = None
+        self.last_live_failure_state: Optional[Dict[str, Any]] = None
 
         self.odom_start: Optional[Tuple[float, float]] = None
         self.odom_last: Optional[Tuple[float, float]] = None
@@ -276,6 +279,7 @@ class EvalMonitor(Node):
         self.create_subscription(String, "/perception/fusion/evaluation/metrics", self.cb_fusion_metrics, 10)
         self.create_subscription(String, "/slam/evaluation/metrics", self.cb_mapping_debug, 10)
         self.create_subscription(String, "/racingbrain/health/system", self.cb_system_health, 10)
+        self.create_subscription(String, "/racingbrain/perception/failure_state", self.cb_failure_state, 10)
 
     def mark(self, topic: str, stamp: Optional[float], extra: Optional[Dict[str, Any]] = None) -> None:
         now = time.time()
@@ -542,6 +546,46 @@ class EvalMonitor(Node):
             self.last_non_stale_system_health = data
         self.mark("/racingbrain/health/system", stamp, row)
 
+    def cb_failure_state(self, msg: String) -> None:
+        now = time.time()
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError:
+            data = {"raw": msg.data}
+
+        stamp_raw = data.get("stamp")
+        try:
+            stamp = float(stamp_raw) if stamp_raw is not None else None
+        except (TypeError, ValueError):
+            stamp = None
+
+        row = {
+            "elapsed_wall_sec": now - self.start_wall,
+            "stamp": stamp,
+            "mode": data.get("mode"),
+            "active_lidar_backend": data.get("active_lidar_backend"),
+            "learning_backend_enabled": data.get("learning_backend_enabled"),
+            "learning_failed": data.get("learning_failed"),
+            "backend_failure": data.get("backend_failure"),
+            "failure_reasons": json.dumps(data.get("failure_reasons", []), ensure_ascii=False),
+            "backend_reasons": json.dumps(data.get("backend_reasons", []), ensure_ascii=False),
+            "health_reasons": json.dumps(data.get("health_reasons", []), ensure_ascii=False),
+            "primary_available": data.get("primary_available"),
+            "fallback_available": data.get("fallback_available"),
+            "primary_age_sec": data.get("primary_age_sec"),
+            "fallback_age_sec": data.get("fallback_age_sec"),
+        }
+        scores = data.get("scores", {}) if isinstance(data.get("scores"), dict) else {}
+        row["primary_empty_ratio"] = scores.get("primary_empty_ratio")
+        row["fallback_empty_ratio"] = scores.get("fallback_empty_ratio")
+        row["primary_mean_cone_count"] = scores.get("primary_mean_cone_count")
+        row["fallback_mean_cone_count"] = scores.get("fallback_mean_cone_count")
+        self.failure_state_rows.append(row)
+        self.last_failure_state = data
+        if bool(data.get("primary_available")) or bool(data.get("fallback_available")):
+            self.last_live_failure_state = data
+        self.mark("/racingbrain/perception/failure_state", stamp, row)
+
     @staticmethod
     def marker_color_name(marker: Marker) -> str:
         r = float(marker.color.r)
@@ -643,6 +687,13 @@ class EvalMonitor(Node):
                 "last": self.last_system_health,
                 "last_non_stale": self.last_non_stale_system_health,
             },
+            "perception_failure": {
+                "frames": len(self.failure_state_rows),
+                "active_backend_counts": dict(Counter(str(r.get("active_lidar_backend")) for r in self.failure_state_rows if r.get("active_lidar_backend") is not None)),
+                "learning_failed_counts": dict(Counter(str(r.get("learning_failed")) for r in self.failure_state_rows if r.get("learning_failed") is not None)),
+                "last": self.last_failure_state,
+                "last_live": self.last_live_failure_state,
+            },
         }
 
 
@@ -702,6 +753,8 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
     trajectory = summary.get("trajectory", {})
     mapping_debug = summary.get("mapping_debug", {})
     system_health = summary.get("system_health", {})
+    perception_failure = summary.get("perception_failure", {})
+    live_failure = perception_failure.get("last_live") or perception_failure.get("last") or {}
     processing_time = summary.get("processing_time_ms", {})
     fusion_consistency = summary.get("fusion_consistency", {})
 
@@ -774,6 +827,14 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
             f"- Health status counts: `{json.dumps(system_health.get('overall_status_counts', {}), ensure_ascii=False)}`",
             f"- Last overall status: `{(system_health.get('last') or {}).get('overall_status')}`",
             f"- Last non-stale status: `{(system_health.get('last_non_stale') or {}).get('overall_status')}`",
+            "",
+            "## Perception Failure State",
+            "",
+            f"- Failure-state frames: `{perception_failure.get('frames')}`",
+            f"- Active backend counts: `{json.dumps(perception_failure.get('active_backend_counts', {}), ensure_ascii=False)}`",
+            f"- Learning-failed counts: `{json.dumps(perception_failure.get('learning_failed_counts', {}), ensure_ascii=False)}`",
+            f"- Last live active backend: `{live_failure.get('active_lidar_backend')}`",
+            f"- Last live failure reasons: `{json.dumps(live_failure.get('failure_reasons', []), ensure_ascii=False)}`",
             "",
             "## Processing Time",
             "",
@@ -990,6 +1051,7 @@ def main() -> int:
         write_csv(log_dir / "odom.csv", monitor.odom_rows)
         write_csv(log_dir / "mapping_debug_frames.csv", monitor.mapping_debug_rows)
         write_csv(log_dir / "system_health.csv", monitor.health_rows)
+        write_csv(log_dir / "perception_failure_state.csv", monitor.failure_state_rows)
         write_csv(log_dir / "processing_times.csv", monitor.timing_rows)
         write_report(log_dir, summary)
         maybe_write_plots(log_dir, monitor)

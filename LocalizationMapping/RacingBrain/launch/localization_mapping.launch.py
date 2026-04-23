@@ -34,7 +34,7 @@ def generate_launch_description():
             DeclareLaunchArgument("lidar_topic", default_value="/lidar_points", description="LiDAR point-cloud topic for cone detection."),
             DeclareLaunchArgument("gnss_topic", default_value="/gongji_gnss_ins_64", description="GNSS/INS topic for mapping."),
             DeclareLaunchArgument("fusion_calibration_file", default_value="", description="Optional override for the fusion calibration YAML file."),
-            DeclareLaunchArgument("lidar_backend", default_value="pointpillars", description="LiDAR backend: pointpillars or cluster."),
+            DeclareLaunchArgument("lidar_backend", default_value="pointpillars", description="LiDAR backend: pointpillars, cluster, or auto."),
             DeclareLaunchArgument("track", default_value="acceleration", description="Track config: acceleration, autocross, or skidpad."),
             DeclareLaunchArgument("rviz", default_value="true", description="Launch RViz with mapping."),
             *launch_actions(

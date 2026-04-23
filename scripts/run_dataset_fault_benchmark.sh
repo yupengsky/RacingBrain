@@ -75,6 +75,8 @@ for scenario in scenarios:
         "summary_path": str(summary_path),
         "success": False,
         "last_health_status": None,
+        "active_lidar_backend": None,
+        "learning_failed": None,
         "final_stable_cones": None,
         "fused_unknown_ratio_mean": None,
         "fusion_consistency_score_mean": None,
@@ -91,12 +93,16 @@ for scenario in scenarios:
         fusion_consistency = data.get("fusion_consistency", {})
         system_health = data.get("system_health") or {}
         last_health = system_health.get("last_non_stale") or system_health.get("last") or {}
+        perception_failure = data.get("perception_failure") or {}
+        last_failure = perception_failure.get("last_live") or perception_failure.get("last") or {}
         lidar_metrics = processing.get("lidar_cluster") or processing.get("pointpillars") or {}
         mapping_metrics = processing.get("mapping") or {}
         row.update(
             {
                 "success": bool(data.get("success")),
                 "last_health_status": last_health.get("overall_status"),
+                "active_lidar_backend": last_failure.get("active_lidar_backend"),
+                "learning_failed": last_failure.get("learning_failed"),
                 "final_stable_cones": ((data.get("map") or {}).get("final_stable_cones")),
                 "fused_unknown_ratio_mean": ((data.get("perception") or {}).get("fused_unknown_ratio") or {}).get("mean"),
                 "fusion_consistency_score_mean": (fusion_consistency.get("consistency_score") or {}).get("mean"),
@@ -122,8 +128,8 @@ lines = [
     f"- Scenarios: `{', '.join(scenarios)}`",
     f"- Summary CSV: `{csv_path}`",
     "",
-    "| Scenario | Success | Health | Stable Cones | UNKNOWN Mean | Consistency | Drift | Projection px | Stamp ms |",
-    "|---|---|---|---:|---:|---:|---:|---:|---:|",
+    "| Scenario | Success | Health | Backend | Learning Failed | Stable Cones | UNKNOWN Mean | Consistency | Drift | Projection px | Stamp ms |",
+    "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|",
 ]
 
 def fmt(value):
@@ -135,7 +141,7 @@ def fmt(value):
 
 for row in rows:
     lines.append(
-        "| {scenario} | {success} | {last_health_status} | {final_stable_cones} | {fused_unknown_ratio_mean} | {fusion_consistency_score_mean} | {fusion_calibration_drift_score_mean} | {fusion_projection_error_px_mean} | {fusion_stamp_delta_ms_mean} |".format(
+        "| {scenario} | {success} | {last_health_status} | {active_lidar_backend} | {learning_failed} | {final_stable_cones} | {fused_unknown_ratio_mean} | {fusion_consistency_score_mean} | {fusion_calibration_drift_score_mean} | {fusion_projection_error_px_mean} | {fusion_stamp_delta_ms_mean} |".format(
             **{k: fmt(v) for k, v in row.items()}
         )
     )

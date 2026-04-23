@@ -26,7 +26,7 @@ ros2 launch racingbrain localization_mapping.launch.py \
   enable_mapping:=true \
   enable_health:=true \
   enable_planning:=false \
-  lidar_backend:=pointpillars \
+  lidar_backend:=auto \
   track:=acceleration
 ```
 
@@ -38,3 +38,5 @@ ros2 run racingbrain racingbrain mapping
 
 Planning is intentionally a placeholder so the planner can later attach to the same localization and mapping entry point.
 Health is enabled by default and publishes `/racingbrain/health/system`.
+Use `lidar_backend:=auto` to let the perception arbiter prefer PointPillars when
+available and fall back to clustering when the learning backend is unavailable or unhealthy.

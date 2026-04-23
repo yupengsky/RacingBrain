@@ -34,7 +34,7 @@ def run_mapping(args):
 
 def add_mapping_args(parser):
     parser.add_argument("--track", default="acceleration")
-    parser.add_argument("--lidar-backend", default="pointpillars", choices=("pointpillars", "cluster"))
+    parser.add_argument("--lidar-backend", default="pointpillars", choices=("pointpillars", "cluster", "auto"))
     parser.add_argument("--rviz", action="store_true")
     parser.add_argument("--eval-debug", action="store_true")
     parser.add_argument("--no-perception", dest="perception", action="store_false")

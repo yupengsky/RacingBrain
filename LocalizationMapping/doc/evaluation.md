@@ -13,6 +13,10 @@ demo execution.
 On the `imp-pointpillars` branch, the default LiDAR backend is PointPillars.
 Use `LIDAR_BACKEND=cluster ./scripts/run_dataset_mapping_eval.sh` to run the old
 PCL clustering backend for an A/B check on the same branch.
+Use `LIDAR_BACKEND=auto ./scripts/run_dataset_mapping_eval.sh` to enable the
+runtime arbiter. In auto mode the selected output still appears on
+`/cone_detection_custom`, while `/racingbrain/perception/failure_state` records
+the active backend and learning-failure reasons.
 
 The script launches the full `racingbrain localization_mapping` stack with `eval_debug:=true`
 and `enable_health:=true`, plays the configured rosbag, and runs a separate monitor process.
@@ -83,6 +87,7 @@ Important artifacts:
 - `odom.csv`: local trajectory samples and cumulative odometry length.
 - `mapping_debug_frames.csv`: optional mapping-node counters from `/slam/evaluation/metrics`.
 - `system_health.csv`: unified online health snapshots from `/racingbrain/health/system`.
+- `perception_failure_state.csv`: online perception failure decisions and active LiDAR backend.
 - `scenario.json`: replay fault configuration for the current run.
 - `fault_injector_stats.json`: shadow-topic replay counts for injected scenarios.
 - `plots/`: quick-look charts when matplotlib is available.

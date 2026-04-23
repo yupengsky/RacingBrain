@@ -124,6 +124,7 @@ class ChainMonitor(Node):
             "/perception/fusion/map": 0,
             "/global_map": 0,
             "/racingbrain/health/system": 0,
+            "/racingbrain/perception/failure_state": 0,
         }
         self.first_times = {}
         self.max_yolo_cones = 0
@@ -136,6 +137,9 @@ class ChainMonitor(Node):
         self.last_health_status = None
         self.last_health_alert_count = 0
         self.last_health_alerts = []
+        self.last_active_lidar_backend = None
+        self.last_learning_failed = None
+        self.last_failure_reasons = []
 
         self.create_subscription(Image, "/camera1/image_raw", self.cb("/camera1/image_raw"), 10)
         self.create_subscription(PointCloud2, "/lidar_points", self.cb("/lidar_points"), 10)
@@ -145,6 +149,7 @@ class ChainMonitor(Node):
         self.create_subscription(Map, "/perception/fusion/map", self.cb_fusion, 10)
         self.create_subscription(MarkerArray, "/global_map", self.cb_global, 10)
         self.create_subscription(String, "/racingbrain/health/system", self.cb_health, 10)
+        self.create_subscription(String, "/racingbrain/perception/failure_state", self.cb_failure_state, 10)
 
     def mark(self, topic):
         self.counts[topic] += 1
@@ -196,6 +201,17 @@ class ChainMonitor(Node):
             self.last_health_alert_count = 0
             self.last_health_alerts = []
 
+    def cb_failure_state(self, msg):
+        self.mark("/racingbrain/perception/failure_state")
+        try:
+            payload = json.loads(msg.data)
+        except json.JSONDecodeError:
+            return
+        self.last_active_lidar_backend = payload.get("active_lidar_backend")
+        self.last_learning_failed = payload.get("learning_failed")
+        reasons = payload.get("failure_reasons") or []
+        self.last_failure_reasons = reasons if isinstance(reasons, list) else []
+
 
 log_dir = Path(sys.argv[1])
 timeout_sec = float(sys.argv[2])
@@ -236,6 +252,9 @@ summary = {
     "last_health_status": node.last_health_status,
     "last_health_alert_count": node.last_health_alert_count,
     "last_health_alerts": node.last_health_alerts,
+    "last_active_lidar_backend": node.last_active_lidar_backend,
+    "last_learning_failed": node.last_learning_failed,
+    "last_failure_reasons": node.last_failure_reasons,
 }
 
 (log_dir / "summary.json").write_text(

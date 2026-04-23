@@ -108,6 +108,8 @@ private:
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr metrics_pub_;
 
     ConeSegmentationCFG cfg_;
+    std::string output_topic_ = "/cone_detection_custom";
+    std::string metrics_topic_ = "/perception/lidar/evaluation/metrics";
     bool eval_metrics_enabled_ = false;
     bool health_metrics_enabled_ = false;
     bool metrics_enabled_ = false;

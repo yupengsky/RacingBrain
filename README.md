@@ -23,8 +23,9 @@ The project is now shaped as a real-time localization and mapping system. Low-le
 
 - ROS 2 Humble bringup for camera, LiDAR, GNSS/INS, fusion, and mapping.
 - GNSS-RTK/INS-aided cone mapping with track-mode configs for acceleration, autocross, and skidpad.
-- LiDAR backend switch: TensorRT PointPillars or legacy clustering.
+- LiDAR backend switch: TensorRT PointPillars, legacy clustering, or automatic fallback.
 - Online health bus for YOLO, LiDAR, fusion, mapping, and camera-LiDAR consistency.
+- Runtime perception failure state for learning-path degradation and LiDAR backend arbitration.
 - Replay fault injection and reliability benchmarks for degraded sensor experiments.
 - Dataset replay smoke tests with topic-level success summaries.
 - Small function folders for perception, mapping, health, and a reserved planner hook.
@@ -188,10 +189,20 @@ ros2 launch racingbrain localization_mapping.launch.py \
   lidar_backend:=cluster \
   enable_planning:=false
 
+# Perception + mapping with learning backend arbitration
+ros2 launch racingbrain localization_mapping.launch.py \
+  lidar_backend:=auto \
+  enable_planning:=false
+
 # Run mapping without the health monitor
 ros2 launch racingbrain localization_mapping.launch.py \
   enable_health:=false
 ```
+
+When `lidar_backend:=auto` is used, PointPillars is treated as the preferred
+learning backend and PCL clustering as the conservative fallback. The arbiter
+publishes the selected stream to `/cone_detection_custom` and reports its
+decision state on `/racingbrain/perception/failure_state`.
 
 ## Tech Stack
 

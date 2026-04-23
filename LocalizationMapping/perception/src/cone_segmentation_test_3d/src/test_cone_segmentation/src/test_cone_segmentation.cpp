@@ -37,19 +37,19 @@ ConeSegmentationNode::ConeSegmentationNode() : Node("cone_segmentation_node")
     cone_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("/cone_markers", 10);
     
     // [关键] 初始化自定义消息发布者
-    // 话题名: /cone_detection_custom
     custom_cones_pub_ = this->create_publisher<test_cone_segmentation::msg::ThreeDConeArray>(
-        "/cone_detection_custom", 10);
+        output_topic_, 10);
     if (metrics_enabled_) {
-        metrics_pub_ = this->create_publisher<std_msgs::msg::String>("/perception/lidar/evaluation/metrics", 10);
+        metrics_pub_ = this->create_publisher<std_msgs::msg::String>(metrics_topic_, 10);
     }
 
     // 打印当前模式
     if (cfg_.use_csf) {
         RCLCPP_INFO(this->get_logger(), "当前模式: [CSF 布料滤波]");
     } else {
-        RCLCPP_INFO(this->get_logger(), "当前模式: [RANSAC 平面拟合]");
+    RCLCPP_INFO(this->get_logger(), "当前模式: [RANSAC 平面拟合]");
     }
+    RCLCPP_INFO(this->get_logger(), "LiDAR cluster output=%s metrics=%s", output_topic_.c_str(), metrics_topic_.c_str());
 }
 
 void ConeSegmentationNode::setup_parameters()
@@ -74,6 +74,8 @@ void ConeSegmentationNode::setup_parameters()
     this->declare_parameter<double>("horizontal_distance_threshold", cfg_.horizontal_distance_threshold);
     this->declare_parameter<int>("min_cluster_size", cfg_.min_cluster_size);
     this->declare_parameter<std::string>("input_topic", "/lidar_points");
+    this->declare_parameter<std::string>("output_topic", "/cone_detection_custom");
+    this->declare_parameter<std::string>("metrics_topic", "/perception/lidar/evaluation/metrics");
     
     // 锥桶拟合参数
     this->declare_parameter<double>("cone_ransac_distance_threshold", cfg_.cone_ransac_distance_threshold);
@@ -101,6 +103,8 @@ void ConeSegmentationNode::setup_parameters()
     
     cfg_.cone_ransac_distance_threshold = this->get_parameter("cone_ransac_distance_threshold").as_double();
     cfg_.cone_ransac_max_iterations = this->get_parameter("cone_ransac_max_iterations").as_int();
+    output_topic_ = this->get_parameter("output_topic").as_string();
+    metrics_topic_ = this->get_parameter("metrics_topic").as_string();
     eval_metrics_enabled_ = this->get_parameter("evaluation.enable_debug_metrics").as_bool();
     health_metrics_enabled_ = this->get_parameter("runtime_health.enable_metrics").as_bool();
     metrics_enabled_ = eval_metrics_enabled_ || health_metrics_enabled_;

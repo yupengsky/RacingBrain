@@ -3,12 +3,11 @@ from configparser import ConfigParser
 from pathlib import Path
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, TimerAction
-from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.substitutions import LaunchConfiguration
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import get_package_prefix, get_package_share_directory
 
 
 def find_path_config():
@@ -57,6 +56,10 @@ def _perform(context, value):
     return str(value)
 
 
+def _as_bool(context, value):
+    return _perform(context, value).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
 def build_fusion_launch(context, eval_debug, health_metrics, fusion_calibration_file):
     try:
         fusion_pkg_share = get_package_share_directory('fs_fusion_box')
@@ -76,6 +79,125 @@ def build_fusion_launch(context, eval_debug, health_metrics, fusion_calibration_
     except Exception as e:
         print(f"Error: 找不到 fs_fusion_box 功能包。请确保它已编译并 source。错误信息: {e}")
         return []
+
+
+def has_ros_executable(package, executable):
+    try:
+        prefix = Path(get_package_prefix(package))
+    except Exception:
+        return False
+    return (prefix / 'lib' / package / executable).exists()
+
+
+def pointpillars_node(lidar_topic, output_topic, metrics_topic, eval_debug, health_metrics, marker_topic='/detected_cones_markers'):
+    return Node(
+        package='trt_cone_detector',
+        executable='trt_infer_node',
+        name='pointpillars_cone_detector',
+        output='screen',
+        parameters=[{
+            'input_topic': lidar_topic,
+            'output_topic': output_topic,
+            'marker_topic': marker_topic,
+            'metrics_topic': metrics_topic,
+            'score_thresh': 0.25,
+            'big_cone_score_thresh': 0.25,
+            'nms_thresh': 0.10,
+            'max_raw_points': 300000,
+            'max_pre_nms': 1024,
+            'max_output_boxes': 200,
+            'intensity_scale': -1.0,
+            'print_latency': ParameterValue(eval_debug, value_type=bool),
+            'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool),
+            'runtime_health.enable_metrics': ParameterValue(health_metrics, value_type=bool),
+        }]
+    )
+
+
+def cluster_node(lidar_topic, output_topic, metrics_topic, eval_debug, health_metrics):
+    return Node(
+        package='test_cone_segmentation',
+        executable='cone_segmentation_node',
+        name='cone_segmentation_node',
+        output='screen',
+        parameters=[{
+            'input_topic': lidar_topic,
+            'output_topic': output_topic,
+            'metrics_topic': metrics_topic,
+            'use_csf': False,
+            'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool),
+            'runtime_health.enable_metrics': ParameterValue(health_metrics, value_type=bool),
+        }]
+    )
+
+
+def build_lidar_launch(context, eval_debug, health_metrics, lidar_topic, lidar_backend):
+    backend = _perform(context, lidar_backend).strip().lower()
+    eval_debug_value = _as_bool(context, eval_debug)
+    health_metrics_value = _as_bool(context, health_metrics)
+    lidar_topic_value = _perform(context, lidar_topic)
+    pointpillars_available = has_ros_executable('trt_cone_detector', 'trt_infer_node')
+
+    generic_output = '/cone_detection_custom'
+    generic_metrics = '/perception/lidar/evaluation/metrics'
+    pointpillars_output = '/perception/lidar/pointpillars/cones'
+    pointpillars_metrics = '/perception/lidar/pointpillars/evaluation/metrics'
+    cluster_output = '/perception/lidar/cluster/cones'
+    cluster_metrics = '/perception/lidar/cluster/evaluation/metrics'
+
+    if backend == 'cluster':
+        return [
+            cluster_node(lidar_topic_value, generic_output, generic_metrics, eval_debug_value, health_metrics_value)
+        ]
+
+    if backend == 'pointpillars' and pointpillars_available:
+        return [
+            pointpillars_node(lidar_topic_value, generic_output, generic_metrics, eval_debug_value, health_metrics_value)
+        ]
+
+    if backend not in {'pointpillars', 'auto'}:
+        print(f"Warning: unsupported lidar_backend={backend}; falling back to cluster.")
+
+    if backend == 'pointpillars' and not pointpillars_available:
+        print("Warning: PointPillars executable is unavailable; launching cluster through the arbiter fallback path.")
+
+    actions = [
+        cluster_node(lidar_topic_value, cluster_output, cluster_metrics, eval_debug_value, health_metrics_value),
+        Node(
+            package='racingbrain',
+            executable='lidar_backend_arbiter',
+            name='lidar_backend_arbiter',
+            output='screen',
+            parameters=[{
+                'mode': 'auto',
+                'preferred_backend': 'pointpillars',
+                'fallback_backend': 'cluster',
+                'learning_backend_enabled': ParameterValue(pointpillars_available, value_type=bool),
+                'primary_topic': pointpillars_output,
+                'fallback_topic': cluster_output,
+                'output_topic': generic_output,
+                'primary_metrics_topic': pointpillars_metrics,
+                'fallback_metrics_topic': cluster_metrics,
+                'output_metrics_topic': generic_metrics,
+                'backend_stale_timeout_sec': 3.0,
+                'fusion_consistency_min': 0.45,
+                'fusion_drift_warn': 0.70,
+            }]
+        )
+    ]
+    if pointpillars_available:
+        actions.insert(
+            0,
+            pointpillars_node(
+                lidar_topic_value,
+                pointpillars_output,
+                pointpillars_metrics,
+                eval_debug_value,
+                health_metrics_value,
+                marker_topic='/perception/lidar/pointpillars/markers',
+            )
+        )
+    return actions
 
 def generate_launch_description():
     eval_debug = LaunchConfiguration('eval_debug')
@@ -105,46 +227,6 @@ def generate_launch_description():
             'image_topic': camera_topic,
             'conf_threshold': 0.5,
             'max_fps': 10.0,
-            'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool),
-            'runtime_health.enable_metrics': ParameterValue(health_metrics, value_type=bool),
-        }]
-    )
-
-    # ==========================================
-    # 2. 配置 3D 雷达检测节点
-    # ==========================================
-    pointpillars_lidar_node = Node(
-        package='trt_cone_detector',
-        executable='trt_infer_node',
-        name='pointpillars_cone_detector',
-        output='screen',
-        condition=IfCondition(PythonExpression(["'", lidar_backend, "' == 'pointpillars'"])),
-        parameters=[{
-            'input_topic': lidar_topic,
-            'output_topic': '/cone_detection_custom',
-            'marker_topic': '/detected_cones_markers',
-            'score_thresh': 0.25,
-            'big_cone_score_thresh': 0.25,
-            'nms_thresh': 0.10,
-            'max_raw_points': 300000,
-            'max_pre_nms': 1024,
-            'max_output_boxes': 200,
-            'intensity_scale': -1.0,
-            'print_latency': ParameterValue(eval_debug, value_type=bool),
-            'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool),
-            'runtime_health.enable_metrics': ParameterValue(health_metrics, value_type=bool),
-        }]
-    )
-
-    cluster_lidar_node = Node(
-        package='test_cone_segmentation',
-        executable='cone_segmentation_node',
-        name='cone_segmentation_node',
-        output='screen',
-        condition=IfCondition(PythonExpression(["'", lidar_backend, "' == 'cluster'"])),
-        parameters=[{
-            'input_topic': lidar_topic,
-            'use_csf': False,   # 关闭 CSF
             'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool),
             'runtime_health.enable_metrics': ParameterValue(health_metrics, value_type=bool),
         }]
@@ -192,15 +274,22 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'lidar_backend',
             default_value='pointpillars',
-            description='LiDAR cone detector backend: pointpillars or cluster.'
+            description='LiDAR cone detector backend: pointpillars, cluster, or auto.'
         ),
 
         # 1. 启动 YOLO
         yolo_node,
         
-        # 2. 启动 LiDAR 锥桶检测
-        pointpillars_lidar_node,
-        cluster_lidar_node,
+        # 2. 启动 LiDAR 锥桶检测或自动仲裁
+        OpaqueFunction(
+            function=build_lidar_launch,
+            kwargs={
+                'eval_debug': eval_debug,
+                'health_metrics': health_metrics,
+                'lidar_topic': lidar_topic,
+                'lidar_backend': lidar_backend,
+            },
+        ),
         
         # 3. 延迟 2 秒启动融合 (等待传感器节点就绪)
         TimerAction(

@@ -30,6 +30,7 @@ def generate_launch_description():
                 'input_topic': '/lidar_points',
                 'output_topic': '/cone_detection_custom',
                 'marker_topic': '/detected_cones_markers',
+                'metrics_topic': '/perception/lidar/evaluation/metrics',
                 'score_thresh': 0.25,
                 'big_cone_score_thresh': 0.25,
                 'nms_thresh': 0.10,

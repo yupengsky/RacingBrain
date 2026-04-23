@@ -44,6 +44,7 @@ public:
         this->declare_parameter("input_topic", "/lidar_points");
         this->declare_parameter("output_topic", "/cone_detection_custom");
         this->declare_parameter("marker_topic", "/detected_cones_markers");
+        this->declare_parameter("metrics_topic", "/perception/lidar/evaluation/metrics");
         this->declare_parameter("engine_path", "");
         this->declare_parameter("evaluation.enable_debug_metrics", false);
         this->declare_parameter("runtime_health.enable_metrics", false);
@@ -59,6 +60,7 @@ public:
         const std::string input_topic = this->get_parameter("input_topic").as_string();
         const std::string output_topic = this->get_parameter("output_topic").as_string();
         const std::string marker_topic = this->get_parameter("marker_topic").as_string();
+        const std::string metrics_topic = this->get_parameter("metrics_topic").as_string();
         eval_metrics_enabled_ = this->get_parameter("evaluation.enable_debug_metrics").as_bool();
         health_metrics_enabled_ = this->get_parameter("runtime_health.enable_metrics").as_bool();
         metrics_enabled_ = eval_metrics_enabled_ || health_metrics_enabled_;
@@ -132,7 +134,7 @@ public:
         marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(marker_topic, 10);
         bbox_pub_ = this->create_publisher<test_cone_segmentation::msg::ThreeDConeArray>(output_topic, 10);
         if (metrics_enabled_) {
-            metrics_pub_ = this->create_publisher<std_msgs::msg::String>("/perception/lidar/evaluation/metrics", 10);
+            metrics_pub_ = this->create_publisher<std_msgs::msg::String>(metrics_topic, 10);
         }
 
         RCLCPP_INFO(this->get_logger(),
