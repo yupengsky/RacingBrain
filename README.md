@@ -221,6 +221,17 @@ perception it keeps updating existing cones with lower weight; under severe
 runtime risk it can stop creating new cones so transient perception failures do
 not pollute the stable global map.
 
+The mapper publishes map layers with different confidence semantics:
+
+```text
+/global_map                    stable cone map for downstream consumers
+/mapping/candidate_cones       low-confidence tracked cones still being tested
+/mapping/rejected_observations per-frame observations rejected by ROI, lock, or risk gate
+```
+
+This keeps the planning-facing map conservative while still exposing the
+candidate and rejection evidence needed for replay analysis and debugging.
+
 ## Tech Stack
 
 - ROS 2 Humble

@@ -257,6 +257,8 @@ class EvalMonitor(Node):
         self.fusion_counts: List[int] = []
         self.fusion_unknown_ratios: List[float] = []
         self.global_counts: List[int] = []
+        self.candidate_layer_counts: List[int] = []
+        self.rejected_observation_counts: List[int] = []
         self.gnss_speeds: List[float] = []
         self.odom_speeds: List[float] = []
         self.final_map_points: List[Tuple[float, float]] = []
@@ -278,6 +280,8 @@ class EvalMonitor(Node):
         self.create_subscription(ThreeDConeArray, "/cone_detection_custom", self.cb_lidar_cones, 10)
         self.create_subscription(Map, "/perception/fusion/map", self.cb_fusion, 10)
         self.create_subscription(MarkerArray, "/global_map", self.cb_global_map, 10)
+        self.create_subscription(MarkerArray, "/mapping/candidate_cones", self.cb_candidate_cones, 10)
+        self.create_subscription(MarkerArray, "/mapping/rejected_observations", self.cb_rejected_observations, 10)
         self.create_subscription(Odometry, "/vehicle_odom", self.cb_odom, 10)
         self.create_subscription(NavPath, "/vehicle_path", self.cb_path, 10)
         self.create_subscription(String, "/perception/yolo/evaluation/metrics", self.cb_yolo_metrics, 10)
@@ -451,6 +455,28 @@ class EvalMonitor(Node):
         self.mark("/global_map", stamp, row)
         self.record_latency("global_map_stamp_minus_last_fusion_stamp", stamp, self.last_stamp_by_name.get("/perception/fusion/map"))
         self.record_latency("global_map_stamp_minus_last_gnss_stamp", stamp, self.last_stamp_by_name.get("/gongji_gnss_ins_64"))
+
+    @staticmethod
+    def marker_layer_count(msg: MarkerArray) -> Tuple[Optional[float], int]:
+        stamp = None
+        count = 0
+        for marker in msg.markers:
+            if stamp is None:
+                stamp = stamp_to_float(marker.header.stamp)
+            if marker.action == Marker.DELETEALL:
+                continue
+            count += 1
+        return stamp, count
+
+    def cb_candidate_cones(self, msg: MarkerArray) -> None:
+        stamp, count = self.marker_layer_count(msg)
+        self.candidate_layer_counts.append(count)
+        self.mark("/mapping/candidate_cones", stamp, {"candidate_cone_count": count})
+
+    def cb_rejected_observations(self, msg: MarkerArray) -> None:
+        stamp, count = self.marker_layer_count(msg)
+        self.rejected_observation_counts.append(count)
+        self.mark("/mapping/rejected_observations", stamp, {"rejected_observation_count": count})
 
     def cb_odom(self, msg: Odometry) -> None:
         stamp = msg_stamp(msg)
@@ -698,6 +724,13 @@ class EvalMonitor(Node):
                 "final_bounds": point_bounds(self.final_map_points),
                 "final_color_counts": dict(self.final_map_color_counts),
             },
+            "map_layers": {
+                "candidate_cones_per_frame": summarize(self.candidate_layer_counts),
+                "rejected_observations_per_frame": summarize(self.rejected_observation_counts),
+                "final_candidate_cones": self.candidate_layer_counts[-1] if self.candidate_layer_counts else None,
+                "last_rejected_observations": self.rejected_observation_counts[-1] if self.rejected_observation_counts else None,
+                "rejected_observations_total": sum(self.rejected_observation_counts),
+            },
             "trajectory": {
                 "odom_length_m": self.odom_length,
                 "start_end_distance_m": start_end_distance,
@@ -798,6 +831,7 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
     scenario = summary.get("scenario", {}) or {}
     perception = summary.get("perception", {})
     map_metrics = summary.get("map", {})
+    map_layers = summary.get("map_layers", {})
     map_pollution = summary.get("map_pollution", {})
     trajectory = summary.get("trajectory", {})
     mapping_debug = summary.get("mapping_debug", {})
@@ -912,6 +946,8 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
             f"- Final duplicate pairs: `{map_metrics.get('final_duplicate_pairs')}`",
             f"- Final nearest-neighbor mean: `{fmt(map_metrics.get('final_nearest_neighbor_m', {}).get('mean'))} m`",
             f"- Final color counts: `{json.dumps(map_metrics.get('final_color_counts', {}), ensure_ascii=False)}`",
+            f"- Final candidate cones: `{map_layers.get('final_candidate_cones')}`",
+            f"- Rejected observations total: `{map_layers.get('rejected_observations_total')}`",
             "",
             "## Map Pollution",
             "",

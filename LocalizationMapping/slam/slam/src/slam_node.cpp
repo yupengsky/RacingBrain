@@ -137,6 +137,8 @@ public:
 
         // 其他相关话题的发布
         global_map_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/global_map", 10);
+        candidate_map_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/mapping/candidate_cones", 10);
+        rejected_observations_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/mapping/rejected_observations", 10);
         tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);       //广播坐标变换
         path_pub_ = this->create_publisher<nav_msgs::msg::Path>("vehicle_path", 10);
         odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("vehicle_odom", 10); 
@@ -188,6 +190,8 @@ private:
         int rejected_roi = 0;
         int rejected_risk_gate = 0;
         int risk_gate_downweighted_observations = 0;
+        int candidate_cones = 0;
+        int rejected_observations = 0;
         int total_tracked = 0;
         int stable_cones = 0;
         double pose_ms = 0.0;
@@ -229,6 +233,14 @@ private:
         bool allow_new_cones = true;
         bool stale = false;
     } current_gate_;
+
+    struct RejectedObservation {
+        Eigen::Vector2d pos = Eigen::Vector2d::Zero();
+        float r = 1.0f;
+        float g = 0.0f;
+        float b = 0.0f;
+        std::string reason;
+    };
 
     // 定义系统参数（基本不会变的参数）
     struct SystemParams {
@@ -1016,17 +1028,20 @@ private:
             // 如果已经锁图，不添加新锥桶
             if (map_locked_) {
                 eval_stats_.rejected_locked++;
+                recordRejectedObservation(z, r, g, b, "map_locked");
                 return;
             }
 
             if (!current_gate_.allow_new_cones) {
                 eval_stats_.rejected_risk_gate++;
+                recordRejectedObservation(z, r, g, b, "risk_gate");
                 return;
             }
 
             // 如果在阿克曼ROI之外，不添加
             if (!isInAckermannTube(cone_x, cone_y)){
                 eval_stats_.rejected_roi++;
+                recordRejectedObservation(z, r, g, b, "roi");
                 return;
             }
 
@@ -1051,6 +1066,22 @@ private:
                 new_cone.id, z.x(), z.y());
         }
         // **************** 新锥桶初始化 ****************
+    }
+
+    void recordRejectedObservation(
+        const Eigen::Vector2d& pos,
+        float r,
+        float g,
+        float b,
+        const std::string& reason)
+    {
+        RejectedObservation observation;
+        observation.pos = pos;
+        observation.r = r;
+        observation.g = g;
+        observation.b = b;
+        observation.reason = reason;
+        frame_rejected_observations_.push_back(observation);
     }
 
     // 锥桶地图的发布
@@ -1117,6 +1148,8 @@ private:
         // ************** 视觉渲染 **************
     
         global_map_pub_->publish(map_msg);
+        publishCandidateMap(stamp);
+        publishRejectedObservations(stamp);
         eval_stats_.publish_global_map_ms = elapsed_ms(publish_start);
         eval_stats_.sync_callback_ms = elapsed_ms(sync_callback_start);
         publishEvaluationMetrics(stamp);
@@ -1126,10 +1159,90 @@ private:
         "Map Status: Total Tracked: %ld | Confirmed Stable: %d", cone_map_.size(), published_count);
     }
 
+    visualization_msgs::msg::Marker makeDeleteAllMarker(
+        const builtin_interfaces::msg::Time& stamp,
+        const std::string& marker_namespace) const
+    {
+        visualization_msgs::msg::Marker marker;
+        marker.header.frame_id = sys_.map_frame;
+        marker.header.stamp = stamp;
+        marker.ns = marker_namespace;
+        marker.action = visualization_msgs::msg::Marker::DELETEALL;
+        return marker;
+    }
+
+    void publishCandidateMap(const builtin_interfaces::msg::Time& stamp) {
+        visualization_msgs::msg::MarkerArray candidate_msg;
+        candidate_msg.markers.push_back(makeDeleteAllMarker(stamp, "candidate_cones"));
+
+        int published_count = 0;
+        for (const auto& cone : cone_map_) {
+            if (cone.is_stable) {
+                continue;
+            }
+
+            visualization_msgs::msg::Marker marker;
+            marker.header.frame_id = sys_.map_frame;
+            marker.header.stamp = stamp;
+            marker.ns = "candidate_cones";
+            marker.id = cone.id;
+            marker.type = visualization_msgs::msg::Marker::SPHERE;
+            marker.action = visualization_msgs::msg::Marker::ADD;
+            marker.pose.position.x = cone.pos.x();
+            marker.pose.position.y = cone.pos.y();
+            marker.pose.position.z = 0.18;
+            marker.pose.orientation.w = 1.0;
+            marker.scale.x = 0.32;
+            marker.scale.y = 0.32;
+            marker.scale.z = 0.32;
+            marker.color.r = cone.r;
+            marker.color.g = cone.g;
+            marker.color.b = cone.b;
+            marker.color.a = 0.35;
+            candidate_msg.markers.push_back(marker);
+            published_count++;
+        }
+
+        eval_stats_.candidate_cones = published_count;
+        candidate_map_pub_->publish(candidate_msg);
+    }
+
+    void publishRejectedObservations(const builtin_interfaces::msg::Time& stamp) {
+        visualization_msgs::msg::MarkerArray rejected_msg;
+        rejected_msg.markers.push_back(makeDeleteAllMarker(stamp, "rejected_observations"));
+
+        int marker_id = 0;
+        for (const auto& observation : frame_rejected_observations_) {
+            visualization_msgs::msg::Marker marker;
+            marker.header.frame_id = sys_.map_frame;
+            marker.header.stamp = stamp;
+            marker.ns = observation.reason;
+            marker.id = marker_id++;
+            marker.type = visualization_msgs::msg::Marker::CUBE;
+            marker.action = visualization_msgs::msg::Marker::ADD;
+            marker.pose.position.x = observation.pos.x();
+            marker.pose.position.y = observation.pos.y();
+            marker.pose.position.z = 0.35;
+            marker.pose.orientation.w = 1.0;
+            marker.scale.x = 0.22;
+            marker.scale.y = 0.22;
+            marker.scale.z = 0.22;
+            marker.color.r = std::max(0.65f, observation.r);
+            marker.color.g = observation.reason == "risk_gate" ? 0.0f : observation.g * 0.35f;
+            marker.color.b = observation.reason == "risk_gate" ? 1.0f : observation.b * 0.35f;
+            marker.color.a = 0.65;
+            rejected_msg.markers.push_back(marker);
+        }
+
+        eval_stats_.rejected_observations = static_cast<int>(frame_rejected_observations_.size());
+        rejected_observations_pub_->publish(rejected_msg);
+    }
+
     void resetEvaluationFrameStats(size_t observation_count) {
         eval_stats_ = EvaluationFrameStats{};
         eval_stats_.frame_index = ++eval_frame_index_;
         eval_stats_.observations_total = static_cast<int>(observation_count);
+        frame_rejected_observations_.clear();
     }
 
     void publishEvaluationMetrics(const builtin_interfaces::msg::Time& stamp) {
@@ -1155,6 +1268,8 @@ private:
             << ",\"rejected_roi\":" << eval_stats_.rejected_roi
             << ",\"rejected_risk_gate\":" << eval_stats_.rejected_risk_gate
             << ",\"risk_gate_downweighted_observations\":" << eval_stats_.risk_gate_downweighted_observations
+            << ",\"candidate_cones\":" << eval_stats_.candidate_cones
+            << ",\"rejected_observations\":" << eval_stats_.rejected_observations
             << ",\"total_tracked\":" << eval_stats_.total_tracked
             << ",\"stable_cones\":" << eval_stats_.stable_cones
             << ",\"risk_gate_enabled\":" << (gate_params_.enabled ? "true" : "false")
@@ -1198,6 +1313,7 @@ private:
     Eigen::Matrix4d T_veh_to_map_ = Eigen::Matrix4d::Identity();
     Eigen::Matrix4d T_l2v_ = Eigen::Matrix4d::Identity();           //雷达外参
     std::vector<GlobalCone> cone_map_; // 锥桶仓库
+    std::vector<RejectedObservation> frame_rejected_observations_;
     std::mutex map_mutex_; // 保护cone_map_的互斥锁
     std::mutex risk_mutex_;
     EnhancedLoopClosureDetector loop_detector_;
@@ -1216,6 +1332,8 @@ private:
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr global_map_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr candidate_map_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr rejected_observations_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr eval_metrics_pub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr failure_state_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr system_health_sub_;

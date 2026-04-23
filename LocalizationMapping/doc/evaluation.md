@@ -96,6 +96,10 @@ Important artifacts:
   best-IoU quality, consistency score, and calibration-drift score.
 - `fusion_frames.csv`: per-frame fused cone counts, colors, unknown ratio, and duplicate risk.
 - `map_frames.csv`: per-frame stable global map counts and nearest-neighbor statistics.
+- `/mapping/candidate_cones` and `/mapping/rejected_observations` are monitored
+  as confidence layers: the former shows tracked cones that have not yet become
+  stable, while the latter shows per-frame observations rejected by map lock,
+  ROI, or the risk-aware gate.
 - `odom.csv`: local trajectory samples and cumulative odometry length.
 - `mapping_debug_frames.csv`: optional mapping-node counters from `/slam/evaluation/metrics`.
   This includes risk-gate state, rejected new cones, and downweighted observations
