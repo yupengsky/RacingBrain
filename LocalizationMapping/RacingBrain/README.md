@@ -40,3 +40,5 @@ Planning is intentionally a placeholder so the planner can later attach to the s
 Health is enabled by default and publishes `/racingbrain/health/system`.
 Use `lidar_backend:=auto` to let the perception arbiter prefer PointPillars when
 available and fall back to clustering when the learning backend is unavailable or unhealthy.
+The mapping gate is enabled by default and can be disabled with
+`mapping_gate:=false` for replay ablations.

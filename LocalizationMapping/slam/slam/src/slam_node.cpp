@@ -8,6 +8,7 @@
 #include <cmath>
 #include <iomanip>
 #include <sstream>
+#include <string>
 #include <Eigen/Dense>
 #include <proj.h>
 #include "rclcpp/rclcpp.hpp"   
@@ -38,6 +39,54 @@ using SteadyClock = std::chrono::steady_clock;
 double elapsed_ms(SteadyClock::time_point start, SteadyClock::time_point end = SteadyClock::now())
 {
     return std::chrono::duration<double, std::milli>(end - start).count();
+}
+
+bool containsToken(const std::string& text, const std::string& token)
+{
+    return text.find(token) != std::string::npos;
+}
+
+std::string extractJsonString(const std::string& text, const std::string& key)
+{
+    const std::string pattern = "\"" + key + "\"";
+    const size_t key_pos = text.find(pattern);
+    if (key_pos == std::string::npos) return "";
+    const size_t colon_pos = text.find(':', key_pos + pattern.size());
+    if (colon_pos == std::string::npos) return "";
+    const size_t quote_start = text.find('"', colon_pos + 1);
+    if (quote_start == std::string::npos) return "";
+    const size_t quote_end = text.find('"', quote_start + 1);
+    if (quote_end == std::string::npos) return "";
+    return text.substr(quote_start + 1, quote_end - quote_start - 1);
+}
+
+bool extractJsonBool(const std::string& text, const std::string& key, bool default_value = false)
+{
+    const std::string pattern = "\"" + key + "\"";
+    const size_t key_pos = text.find(pattern);
+    if (key_pos == std::string::npos) return default_value;
+    const size_t colon_pos = text.find(':', key_pos + pattern.size());
+    if (colon_pos == std::string::npos) return default_value;
+    const size_t value_pos = text.find_first_not_of(" \t\r\n", colon_pos + 1);
+    if (value_pos == std::string::npos) return default_value;
+    if (text.compare(value_pos, 4, "true") == 0) return true;
+    if (text.compare(value_pos, 5, "false") == 0) return false;
+    return default_value;
+}
+
+std::string jsonEscape(const std::string& text)
+{
+    std::ostringstream out;
+    for (char c : text) {
+        if (c == '\\' || c == '"') {
+            out << '\\' << c;
+        } else if (c == '\n') {
+            out << "\\n";
+        } else {
+            out << c;
+        }
+    }
+    return out.str();
 }
 }  // namespace
 
@@ -94,6 +143,14 @@ public:
         if (metrics_enabled_) {
             eval_metrics_pub_ = this->create_publisher<std_msgs::msg::String>("/slam/evaluation/metrics", 10);
         }
+        if (gate_params_.enabled) {
+            failure_state_sub_ = this->create_subscription<std_msgs::msg::String>(
+                gate_params_.failure_state_topic, 10,
+                std::bind(&SlamProcessor::failureStateCallback, this, std::placeholders::_1));
+            system_health_sub_ = this->create_subscription<std_msgs::msg::String>(
+                gate_params_.health_topic, 10,
+                std::bind(&SlamProcessor::systemHealthCallback, this, std::placeholders::_1));
+        }
         path_msg_.header.frame_id = sys_.map_frame;
         // ****************** 订阅与发布 ******************
 
@@ -129,6 +186,8 @@ private:
         int missed_in_view = 0;
         int rejected_locked = 0;
         int rejected_roi = 0;
+        int rejected_risk_gate = 0;
+        int risk_gate_downweighted_observations = 0;
         int total_tracked = 0;
         int stable_cones = 0;
         double pose_ms = 0.0;
@@ -136,6 +195,40 @@ private:
         double publish_global_map_ms = 0.0;
         double sync_callback_ms = 0.0;
     };
+
+    struct RiskGateParams {
+        bool enabled = true;
+        std::string failure_state_topic = "/racingbrain/perception/failure_state";
+        std::string health_topic = "/racingbrain/health/system";
+        double stale_timeout_sec = 2.5;
+        double degraded_hit_scale = 0.60;
+        double severe_hit_scale = 0.35;
+        int min_stable_cones_before_freeze = 6;
+        int min_frames_before_freeze = 20;
+        bool freeze_new_cones_on_degraded = false;
+        bool freeze_new_cones_on_severe = true;
+    } gate_params_;
+
+    struct PerceptionRiskState {
+        bool has_failure_state = false;
+        bool has_health = false;
+        bool learning_failed = false;
+        bool fallback_available = false;
+        std::string active_backend;
+        std::string failure_raw;
+        std::string health_raw;
+        std::string health_status;
+        SteadyClock::time_point failure_wall = SteadyClock::now();
+        SteadyClock::time_point health_wall = SteadyClock::now();
+    } risk_state_;
+
+    struct RiskGateDecision {
+        std::string state = "open";
+        std::string reasons = "none";
+        double hit_scale = 1.0;
+        bool allow_new_cones = true;
+        bool stale = false;
+    } current_gate_;
 
     // 定义系统参数（基本不会变的参数）
     struct SystemParams {
@@ -266,6 +359,28 @@ private:
         health_metrics_enabled_ = this->get_parameter("runtime_health.enable_metrics").as_bool();
         metrics_enabled_ = eval_metrics_enabled_ || health_metrics_enabled_;
 
+        this->declare_parameter("mapping_gate.enable", true);
+        this->declare_parameter("mapping_gate.failure_state_topic", gate_params_.failure_state_topic);
+        this->declare_parameter("mapping_gate.health_topic", gate_params_.health_topic);
+        this->declare_parameter("mapping_gate.stale_timeout_sec", gate_params_.stale_timeout_sec);
+        this->declare_parameter("mapping_gate.degraded_hit_scale", gate_params_.degraded_hit_scale);
+        this->declare_parameter("mapping_gate.severe_hit_scale", gate_params_.severe_hit_scale);
+        this->declare_parameter("mapping_gate.min_stable_cones_before_freeze", gate_params_.min_stable_cones_before_freeze);
+        this->declare_parameter("mapping_gate.min_frames_before_freeze", gate_params_.min_frames_before_freeze);
+        this->declare_parameter("mapping_gate.freeze_new_cones_on_degraded", gate_params_.freeze_new_cones_on_degraded);
+        this->declare_parameter("mapping_gate.freeze_new_cones_on_severe", gate_params_.freeze_new_cones_on_severe);
+
+        gate_params_.enabled = this->get_parameter("mapping_gate.enable").as_bool();
+        gate_params_.failure_state_topic = this->get_parameter("mapping_gate.failure_state_topic").as_string();
+        gate_params_.health_topic = this->get_parameter("mapping_gate.health_topic").as_string();
+        gate_params_.stale_timeout_sec = this->get_parameter("mapping_gate.stale_timeout_sec").as_double();
+        gate_params_.degraded_hit_scale = this->get_parameter("mapping_gate.degraded_hit_scale").as_double();
+        gate_params_.severe_hit_scale = this->get_parameter("mapping_gate.severe_hit_scale").as_double();
+        gate_params_.min_stable_cones_before_freeze = this->get_parameter("mapping_gate.min_stable_cones_before_freeze").as_int();
+        gate_params_.min_frames_before_freeze = this->get_parameter("mapping_gate.min_frames_before_freeze").as_int();
+        gate_params_.freeze_new_cones_on_degraded = this->get_parameter("mapping_gate.freeze_new_cones_on_degraded").as_bool();
+        gate_params_.freeze_new_cones_on_severe = this->get_parameter("mapping_gate.freeze_new_cones_on_severe").as_bool();
+
         // 回环检测器参数加载
         this->declare_parameter("loop_closure.distance_threshold", 1.5);
         this->declare_parameter("loop_closure.approach_angle_threshold", 35.0);
@@ -286,6 +401,145 @@ private:
             this->get_parameter("loop_closure.min_approach_speed").as_double(),
             this->get_parameter("loop_closure.min_lap_time").as_double()
         );
+    }
+
+    void failureStateCallback(const std_msgs::msg::String::SharedPtr msg) {
+        std::lock_guard<std::mutex> lock(risk_mutex_);
+        risk_state_.has_failure_state = true;
+        risk_state_.failure_raw = msg->data;
+        risk_state_.active_backend = extractJsonString(msg->data, "active_lidar_backend");
+        risk_state_.learning_failed = extractJsonBool(msg->data, "learning_failed", false);
+        risk_state_.fallback_available = extractJsonBool(msg->data, "fallback_available", false);
+        risk_state_.failure_wall = SteadyClock::now();
+    }
+
+    void systemHealthCallback(const std_msgs::msg::String::SharedPtr msg) {
+        std::lock_guard<std::mutex> lock(risk_mutex_);
+        risk_state_.has_health = true;
+        risk_state_.health_raw = msg->data;
+        risk_state_.health_status = extractJsonString(msg->data, "overall_status");
+        risk_state_.health_wall = SteadyClock::now();
+    }
+
+    int countStableCones() const {
+        int count = 0;
+        for (const auto& cone : cone_map_) {
+            if (cone.is_stable) count++;
+        }
+        return count;
+    }
+
+    RiskGateDecision evaluateRiskGateDecision() {
+        RiskGateDecision decision;
+        if (!gate_params_.enabled) {
+            decision.state = "disabled";
+            decision.reasons = "gate_disabled";
+            return decision;
+        }
+
+        PerceptionRiskState state;
+        {
+            std::lock_guard<std::mutex> lock(risk_mutex_);
+            state = risk_state_;
+        }
+
+        if (!state.has_failure_state) {
+            decision.state = "open";
+            decision.reasons = "no_failure_state";
+            return decision;
+        }
+
+        const double age_sec = std::chrono::duration<double>(SteadyClock::now() - state.failure_wall).count();
+        if (age_sec > gate_params_.stale_timeout_sec) {
+            decision.state = "stale";
+            decision.reasons = "failure_state_stale";
+            decision.stale = true;
+            return decision;
+        }
+
+        const std::string& raw = state.failure_raw;
+        const bool fallback_active = (state.active_backend == "cluster");
+        const bool learning_unavailable = containsToken(raw, "learning_backend_unavailable");
+        const bool fallback_only = learning_unavailable && fallback_active;
+
+        bool severe = false;
+        bool degraded = false;
+        std::vector<std::string> reasons;
+
+        auto mark_severe = [&](const std::string& token) {
+            if (containsToken(raw, token)) {
+                severe = true;
+                reasons.push_back(token);
+            }
+        };
+        auto mark_degraded = [&](const std::string& token) {
+            if (containsToken(raw, token)) {
+                degraded = true;
+                reasons.push_back(token);
+            }
+        };
+
+        mark_severe("fusion_time_offset_high");
+        mark_severe("fusion_consistency_low");
+        mark_severe("yolo_empty_ratio_high");
+        mark_severe("pointpillars_empty_ratio_high");
+        if (!fallback_only) {
+            mark_severe("pointpillars_stale");
+        }
+
+        mark_degraded("fusion_calibration_drift_suspect");
+        mark_degraded("fusion_drift_score_high");
+        mark_degraded("fusion_projection_residual_high");
+        mark_degraded("yolo_stale");
+        mark_degraded("yolo_latency_high");
+        mark_degraded("lidar_latency_high");
+        mark_degraded("pointpillars_latency_high");
+
+        if (fallback_only) {
+            reasons.push_back("cluster_fallback_active");
+        } else if (learning_unavailable) {
+            severe = true;
+            reasons.push_back("learning_backend_unavailable");
+        }
+
+        if (reasons.empty()) {
+            decision.state = "open";
+            decision.reasons = "none";
+            return decision;
+        }
+
+        const bool freeze_ready = eval_frame_index_ >= gate_params_.min_frames_before_freeze
+            || countStableCones() >= gate_params_.min_stable_cones_before_freeze;
+        bool freeze_new_cones = false;
+        if (severe && gate_params_.freeze_new_cones_on_severe && freeze_ready) {
+            freeze_new_cones = true;
+        } else if (degraded && gate_params_.freeze_new_cones_on_degraded && freeze_ready) {
+            freeze_new_cones = true;
+        }
+
+        if (freeze_new_cones) {
+            decision.state = "freeze";
+            decision.hit_scale = gate_params_.severe_hit_scale;
+            decision.allow_new_cones = false;
+        } else if (severe) {
+            decision.state = "degraded";
+            decision.hit_scale = gate_params_.severe_hit_scale;
+            if (!freeze_ready) reasons.push_back("gate_warmup");
+        } else if (degraded) {
+            decision.state = "degraded";
+            decision.hit_scale = gate_params_.degraded_hit_scale;
+        } else {
+            decision.state = "monitor";
+            decision.hit_scale = 1.0;
+        }
+
+        std::ostringstream reason_stream;
+        for (size_t i = 0; i < reasons.size(); ++i) {
+            if (i > 0) reason_stream << ";";
+            reason_stream << reasons[i];
+        }
+        decision.reasons = reason_stream.str();
+        return decision;
     }
 
     // 负责高频轨迹 TF, Odom, Path 发布 (100Hz)
@@ -331,6 +585,7 @@ private:
         std::lock_guard<std::mutex> lock(map_mutex_);
         resetEvaluationFrameStats(map_msg->track.size());
         eval_stats_.pose_ms = pose_ms;
+        current_gate_ = evaluateRiskGateDecision();
 
         // 每一帧建图开始前，先把所有锥桶标记为未匹配
         const auto mapping_start = SteadyClock::now();
@@ -667,6 +922,10 @@ private:
         float confidence = 1.0f - static_cast<float>(dist_to_sensor / max_sensing_range) * 0.6f;
         confidence = std::max(0.4f, confidence); // 置信度保底 0.4
         double dynamic_l_hit = params_.l_hit * confidence; 
+        if (current_gate_.hit_scale < 0.999) {
+            dynamic_l_hit *= current_gate_.hit_scale;
+            eval_stats_.risk_gate_downweighted_observations++;
+        }
         // ************* 基于距离的置信度判定 ************ 
 
         // *************** 各向异性噪声建模 ***************
@@ -757,6 +1016,11 @@ private:
             // 如果已经锁图，不添加新锥桶
             if (map_locked_) {
                 eval_stats_.rejected_locked++;
+                return;
+            }
+
+            if (!current_gate_.allow_new_cones) {
+                eval_stats_.rejected_risk_gate++;
                 return;
             }
 
@@ -889,8 +1153,16 @@ private:
             << ",\"missed_in_view\":" << eval_stats_.missed_in_view
             << ",\"rejected_locked\":" << eval_stats_.rejected_locked
             << ",\"rejected_roi\":" << eval_stats_.rejected_roi
+            << ",\"rejected_risk_gate\":" << eval_stats_.rejected_risk_gate
+            << ",\"risk_gate_downweighted_observations\":" << eval_stats_.risk_gate_downweighted_observations
             << ",\"total_tracked\":" << eval_stats_.total_tracked
             << ",\"stable_cones\":" << eval_stats_.stable_cones
+            << ",\"risk_gate_enabled\":" << (gate_params_.enabled ? "true" : "false")
+            << ",\"risk_gate_state\":\"" << jsonEscape(current_gate_.state) << "\""
+            << ",\"risk_gate_reasons\":\"" << jsonEscape(current_gate_.reasons) << "\""
+            << ",\"risk_gate_hit_scale\":" << current_gate_.hit_scale
+            << ",\"risk_gate_new_cones_allowed\":" << (current_gate_.allow_new_cones ? "true" : "false")
+            << ",\"risk_gate_stale\":" << (current_gate_.stale ? "true" : "false")
             << ",\"observations_used_ratio\":"
             << (eval_stats_.observations_total > 0 ? static_cast<double>(eval_stats_.observations_used) / static_cast<double>(eval_stats_.observations_total) : 0.0)
             << ",\"map_locked\":" << (map_locked_ ? "true" : "false")
@@ -927,6 +1199,7 @@ private:
     Eigen::Matrix4d T_l2v_ = Eigen::Matrix4d::Identity();           //雷达外参
     std::vector<GlobalCone> cone_map_; // 锥桶仓库
     std::mutex map_mutex_; // 保护cone_map_的互斥锁
+    std::mutex risk_mutex_;
     EnhancedLoopClosureDetector loop_detector_;
 
     // ROS接口
@@ -944,6 +1217,8 @@ private:
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr global_map_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr eval_metrics_pub_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr failure_state_sub_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr system_health_sub_;
     nav_msgs::msg::Path path_msg_;
 };
 

@@ -16,7 +16,7 @@ def _enabled(context, value):
     return _perform(context, value).strip().lower() in ("1", "true", "yes", "on")
 
 
-def _setup(context, track, rviz, eval_debug, health_metrics, gnss_topic, enabled):
+def _setup(context, track, rviz, eval_debug, health_metrics, gnss_topic, mapping_gate, enabled):
     if not _enabled(context, enabled):
         return []
 
@@ -30,6 +30,7 @@ def _setup(context, track, rviz, eval_debug, health_metrics, gnss_topic, enabled
                 "eval_debug": eval_debug,
                 "health_metrics": health_metrics,
                 "gnss_topic": gnss_topic,
+                "mapping_gate": mapping_gate,
             },
         )
     ]
@@ -41,6 +42,7 @@ def launch_actions(
     eval_debug=None,
     health_metrics=None,
     gnss_topic=None,
+    mapping_gate=None,
     enabled=None,
 ):
     track = track or LaunchConfiguration("track")
@@ -48,6 +50,7 @@ def launch_actions(
     eval_debug = eval_debug or LaunchConfiguration("eval_debug")
     health_metrics = health_metrics or LaunchConfiguration("enable_health")
     gnss_topic = gnss_topic or LaunchConfiguration("gnss_topic")
+    mapping_gate = mapping_gate or LaunchConfiguration("mapping_gate")
 
     return [
         OpaqueFunction(
@@ -58,6 +61,7 @@ def launch_actions(
                 "eval_debug": eval_debug,
                 "health_metrics": health_metrics,
                 "gnss_topic": gnss_topic,
+                "mapping_gate": mapping_gate,
                 "enabled": enabled,
             },
         )

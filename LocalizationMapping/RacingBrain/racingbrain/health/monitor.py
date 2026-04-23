@@ -414,6 +414,9 @@ class RuntimeHealthMonitor(Node):
         latest = history.latest()
         stable_cones = history.numeric_series("stable_cones")
         sync_callback_ms = history.numeric_series("sync_callback_ms")
+        gate_hit_scales = history.numeric_series("risk_gate_hit_scale")
+        rejected_risk_gate = history.numeric_series("rejected_risk_gate")
+        downweighted = history.numeric_series("risk_gate_downweighted_observations")
         utilization = []
         for payload in history.payloads:
             total = as_float(payload.get("observations_total"))
@@ -428,11 +431,20 @@ class RuntimeHealthMonitor(Node):
                 "mean_observation_utilization": mean(utilization),
                 "mean_sync_callback_ms": mean(sync_callback_ms),
                 "map_locked": None if latest is None else as_bool(latest.get("map_locked")),
+                "last_risk_gate_state": None if latest is None else latest.get("risk_gate_state"),
+                "last_risk_gate_reasons": None if latest is None else latest.get("risk_gate_reasons"),
+                "last_risk_gate_new_cones_allowed": None if latest is None else as_bool(latest.get("risk_gate_new_cones_allowed")),
+                "mean_risk_gate_hit_scale": mean(gate_hit_scales),
+                "rejected_risk_gate_total": sum(rejected_risk_gate),
+                "risk_gate_downweighted_total": sum(downweighted),
             }
         )
 
         if info["status"] == "ok":
-            if uptime_sec > max(self.startup_grace_sec * 2.0, 15.0) and (info["last_stable_cones"] or 0.0) < 1.0:
+            if info["last_risk_gate_state"] in {"degraded", "freeze"}:
+                info["status"] = "warn"
+                info["alerts"].append("mapping_risk_gate_active")
+            elif uptime_sec > max(self.startup_grace_sec * 2.0, 15.0) and (info["last_stable_cones"] or 0.0) < 1.0:
                 info["status"] = "warn"
                 info["alerts"].append("mapping_no_stable_cones")
             elif (info["mean_sync_callback_ms"] or 0.0) > 120.0:

@@ -26,6 +26,7 @@ The project is now shaped as a real-time localization and mapping system. Low-le
 - LiDAR backend switch: TensorRT PointPillars, legacy clustering, or automatic fallback.
 - Online health bus for YOLO, LiDAR, fusion, mapping, and camera-LiDAR consistency.
 - Runtime perception failure state for learning-path degradation and LiDAR backend arbitration.
+- Risk-aware mapping gate that downweights unreliable observations and can freeze new-cone creation.
 - Replay fault injection and reliability benchmarks for degraded sensor experiments.
 - Dataset replay smoke tests with topic-level success summaries.
 - Small function folders for perception, mapping, health, and a reserved planner hook.
@@ -203,6 +204,11 @@ When `lidar_backend:=auto` is used, PointPillars is treated as the preferred
 learning backend and PCL clustering as the conservative fallback. The arbiter
 publishes the selected stream to `/cone_detection_custom` and reports its
 decision state on `/racingbrain/perception/failure_state`.
+
+Mapping consumes the failure state through a risk-aware gate. Under degraded
+perception it keeps updating existing cones with lower weight; under severe
+runtime risk it can stop creating new cones so transient perception failures do
+not pollute the stable global map.
 
 ## Tech Stack
 

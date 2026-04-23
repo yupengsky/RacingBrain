@@ -537,6 +537,11 @@ class EvalMonitor(Node):
         if isinstance(components.get("mapping"), dict):
             row["mapping_stable_cones"] = components["mapping"].get("last_stable_cones")
             row["mapping_observation_utilization"] = components["mapping"].get("mean_observation_utilization")
+            row["mapping_risk_gate_state"] = components["mapping"].get("last_risk_gate_state")
+            row["mapping_risk_gate_reasons"] = components["mapping"].get("last_risk_gate_reasons")
+            row["mapping_risk_gate_hit_scale"] = components["mapping"].get("mean_risk_gate_hit_scale")
+            row["mapping_risk_gate_rejected_total"] = components["mapping"].get("rejected_risk_gate_total")
+            row["mapping_risk_gate_downweighted_total"] = components["mapping"].get("risk_gate_downweighted_total")
         if isinstance(components.get("lidar"), dict):
             row["lidar_backend_component"] = components["lidar"].get("backend_component")
 
@@ -679,6 +684,9 @@ class EvalMonitor(Node):
                 "removed_cones_total": sum(int(r.get("removed_cones", 0)) for r in self.mapping_debug_rows),
                 "missed_in_view_total": sum(int(r.get("missed_in_view", 0)) for r in self.mapping_debug_rows),
                 "unknown_observations_total": sum(int(r.get("observations_unknown", 0)) for r in self.mapping_debug_rows),
+                "rejected_risk_gate_total": sum(int(r.get("rejected_risk_gate", 0)) for r in self.mapping_debug_rows),
+                "risk_gate_downweighted_total": sum(int(r.get("risk_gate_downweighted_observations", 0)) for r in self.mapping_debug_rows),
+                "risk_gate_state_counts": dict(Counter(str(r.get("risk_gate_state")) for r in self.mapping_debug_rows if r.get("risk_gate_state") is not None)),
                 "last": self.mapping_debug_rows[-1] if self.mapping_debug_rows else None,
             },
             "system_health": {
@@ -878,6 +886,9 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
             f"- Matched cones total: `{mapping_debug.get('matched_cones_total')}`",
             f"- Removed cones total: `{mapping_debug.get('removed_cones_total')}`",
             f"- Unknown observations total: `{mapping_debug.get('unknown_observations_total')}`",
+            f"- Risk-gate rejected new cones: `{mapping_debug.get('rejected_risk_gate_total')}`",
+            f"- Risk-gate downweighted observations: `{mapping_debug.get('risk_gate_downweighted_total')}`",
+            f"- Risk-gate state counts: `{json.dumps(mapping_debug.get('risk_gate_state_counts', {}), ensure_ascii=False)}`",
             "",
             "## Notes",
             "",

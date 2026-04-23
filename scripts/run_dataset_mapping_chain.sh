@@ -13,6 +13,7 @@ TRACK="${TRACK:-acceleration}"
 RVIZ="${RVIZ:-false}"
 KEEP_RUNNING="${KEEP_RUNNING:-false}"
 LIDAR_BACKEND="${LIDAR_BACKEND:-pointpillars}"
+MAPPING_GATE="${MAPPING_GATE:-true}"
 DRD26_PATH_CONFIG="${DRD26_PATH_CONFIG:-${WORKSPACE_DIR}/LocalizationMapping/config/hardcoded_paths.ini}"
 
 source "${WORKSPACE_DIR}/scripts/activate_ros_ml.sh" >/tmp/drd26_activate_ros_ml.log
@@ -73,6 +74,7 @@ echo "Dataset: ${DATASET_DIR}"
 echo "ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}"
 echo "Bag rate: ${BAG_RATE}"
 echo "LiDAR backend: ${LIDAR_BACKEND}"
+echo "Mapping gate: ${MAPPING_GATE}"
 echo "Keep running after success: ${KEEP_RUNNING}"
 echo "Logs: ${LOG_DIR}"
 
@@ -80,6 +82,7 @@ ros2 launch racingbrain localization_mapping.launch.py \
   "track:=${TRACK}" \
   "rviz:=${RVIZ}" \
   "lidar_backend:=${LIDAR_BACKEND}" \
+  "mapping_gate:=${MAPPING_GATE}" \
   "enable_planning:=false" \
   "enable_health:=true" \
   >"${LOG_DIR}/stack.log" 2>&1 &

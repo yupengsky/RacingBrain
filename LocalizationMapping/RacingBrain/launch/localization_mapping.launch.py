@@ -18,6 +18,7 @@ def generate_launch_description():
     gnss_topic = LaunchConfiguration("gnss_topic")
     fusion_calibration_file = LaunchConfiguration("fusion_calibration_file")
     lidar_backend = LaunchConfiguration("lidar_backend")
+    mapping_gate = LaunchConfiguration("mapping_gate")
     track = LaunchConfiguration("track")
     rviz = LaunchConfiguration("rviz")
 
@@ -35,6 +36,7 @@ def generate_launch_description():
             DeclareLaunchArgument("gnss_topic", default_value="/gongji_gnss_ins_64", description="GNSS/INS topic for mapping."),
             DeclareLaunchArgument("fusion_calibration_file", default_value="", description="Optional override for the fusion calibration YAML file."),
             DeclareLaunchArgument("lidar_backend", default_value="pointpillars", description="LiDAR backend: pointpillars, cluster, or auto."),
+            DeclareLaunchArgument("mapping_gate", default_value="true", description="Enable risk-aware mapping gate."),
             DeclareLaunchArgument("track", default_value="acceleration", description="Track config: acceleration, autocross, or skidpad."),
             DeclareLaunchArgument("rviz", default_value="true", description="Launch RViz with mapping."),
             *launch_actions(
@@ -50,6 +52,7 @@ def generate_launch_description():
                 gnss_topic=gnss_topic,
                 fusion_calibration_file=fusion_calibration_file,
                 lidar_backend=lidar_backend,
+                mapping_gate=mapping_gate,
                 track=track,
                 rviz=rviz,
             ),

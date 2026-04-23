@@ -15,6 +15,7 @@ def launch_setup(context):
     eval_debug = LaunchConfiguration("eval_debug")
     health_metrics = LaunchConfiguration("health_metrics")
     gnss_topic = LaunchConfiguration("gnss_topic")
+    mapping_gate = LaunchConfiguration("mapping_gate")
 
     pkg_share = get_package_share_directory("slam")
 
@@ -34,6 +35,7 @@ def launch_setup(context):
                 "evaluation.enable_debug_metrics": ParameterValue(eval_debug, value_type=bool),
                 "runtime_health.enable_metrics": ParameterValue(health_metrics, value_type=bool),
                 "system.gnss_topic": gnss_topic,
+                "mapping_gate.enable": ParameterValue(mapping_gate, value_type=bool),
             },
         ]
     )
@@ -83,6 +85,11 @@ def generate_launch_description():
             "gnss_topic",
             default_value="/gongji_gnss_ins_64",
             description="GNSS/INS topic for mapping"
+        ),
+        DeclareLaunchArgument(
+            "mapping_gate",
+            default_value="true",
+            description="Enable risk-aware mapping gate"
         ),
 
         OpaqueFunction(function=launch_setup)

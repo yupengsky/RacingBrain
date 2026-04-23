@@ -86,6 +86,8 @@ Important artifacts:
 - `map_frames.csv`: per-frame stable global map counts and nearest-neighbor statistics.
 - `odom.csv`: local trajectory samples and cumulative odometry length.
 - `mapping_debug_frames.csv`: optional mapping-node counters from `/slam/evaluation/metrics`.
+  This includes risk-gate state, rejected new cones, and downweighted observations
+  when risk-aware mapping is enabled.
 - `system_health.csv`: unified online health snapshots from `/racingbrain/health/system`.
 - `perception_failure_state.csv`: online perception failure decisions and active LiDAR backend.
 - `scenario.json`: replay fault configuration for the current run.
@@ -99,3 +101,11 @@ timing, fusion quality, map stability, duplicate risk, trajectory closure indica
 camera-LiDAR alignment quality, and the aggregated status of the online health bus.
 They are not absolute accuracy metrics unless annotated cone positions or a reference
 trajectory are added later.
+
+Risk-aware mapping can be toggled during replay with:
+
+```bash
+MAPPING_GATE=false ./scripts/run_dataset_mapping_eval.sh
+```
+
+The default is `MAPPING_GATE=true`.

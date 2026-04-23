@@ -19,6 +19,7 @@ def launch_actions(
     gnss_topic,
     fusion_calibration_file,
     lidar_backend,
+    mapping_gate,
     track,
     rviz,
 ):
@@ -43,6 +44,7 @@ def launch_actions(
             eval_debug=eval_debug,
             health_metrics=enable_health,
             gnss_topic=gnss_topic,
+            mapping_gate=mapping_gate,
             enabled=enable_mapping,
         )
     )
