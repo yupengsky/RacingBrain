@@ -55,13 +55,13 @@ mkdir -p "${LOG_DIR}"
 
 cleanup() {
   set +e
-  for pid in ${BAG_PID:-} ${MONITOR_PID:-} ${PERCEPTION_PID:-} ${MAPPING_PID:-}; do
+  for pid in ${BAG_PID:-} ${MONITOR_PID:-} ${STACK_PID:-}; do
     if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
       kill -INT "${pid}" 2>/dev/null || true
     fi
   done
   sleep 2
-  for pid in ${BAG_PID:-} ${MONITOR_PID:-} ${PERCEPTION_PID:-} ${MAPPING_PID:-}; do
+  for pid in ${BAG_PID:-} ${MONITOR_PID:-} ${STACK_PID:-}; do
     if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
       kill -TERM "${pid}" 2>/dev/null || true
     fi
@@ -80,11 +80,15 @@ echo "Idle timeout: ${IDLE_TIMEOUT}"
 echo "Duplicate threshold: ${DUPLICATE_THRESHOLD}"
 echo "Logs: ${LOG_DIR}"
 
-ros2 launch run_perception system_run.launch.py "lidar_backend:=${LIDAR_BACKEND}" "eval_debug:=true" >"${LOG_DIR}/perception.log" 2>&1 &
-PERCEPTION_PID=$!
-
-ros2 launch slam slam.launch.py "track:=${TRACK}" "rviz:=${RVIZ}" "eval_debug:=true" >"${LOG_DIR}/mapping.log" 2>&1 &
-MAPPING_PID=$!
+ros2 launch racingbrain localization_mapping.launch.py \
+  "track:=${TRACK}" \
+  "rviz:=${RVIZ}" \
+  "lidar_backend:=${LIDAR_BACKEND}" \
+  "eval_debug:=true" \
+  "enable_planning:=false" \
+  "enable_health:=true" \
+  >"${LOG_DIR}/stack.log" 2>&1 &
+STACK_PID=$!
 
 sleep "${STARTUP_WAIT}"
 
@@ -114,11 +118,8 @@ echo
 echo "--- eval monitor tail ---"
 tail -n 80 "${LOG_DIR}/eval_monitor.log" || true
 echo
-echo "--- perception tail ---"
-tail -n 40 "${LOG_DIR}/perception.log" || true
-echo
-echo "--- mapping tail ---"
-tail -n 50 "${LOG_DIR}/mapping.log" || true
+echo "--- stack tail ---"
+tail -n 80 "${LOG_DIR}/stack.log" || true
 echo
 echo "--- bag tail ---"
 tail -n 30 "${LOG_DIR}/bag.log" || true

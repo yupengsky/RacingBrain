@@ -227,6 +227,7 @@ class EvalMonitor(Node):
         self.map_rows: List[Dict[str, Any]] = []
         self.odom_rows: List[Dict[str, Any]] = []
         self.mapping_debug_rows: List[Dict[str, Any]] = []
+        self.health_rows: List[Dict[str, Any]] = []
         self.timing_rows: List[Dict[str, Any]] = []
 
         self.yolo_counts: List[int] = []
@@ -238,6 +239,7 @@ class EvalMonitor(Node):
         self.odom_speeds: List[float] = []
         self.final_map_points: List[Tuple[float, float]] = []
         self.final_map_color_counts: Counter[str] = Counter()
+        self.last_system_health: Optional[Dict[str, Any]] = None
 
         self.odom_start: Optional[Tuple[float, float]] = None
         self.odom_last: Optional[Tuple[float, float]] = None
@@ -257,6 +259,7 @@ class EvalMonitor(Node):
         self.create_subscription(String, "/perception/lidar/evaluation/metrics", self.cb_lidar_metrics, 10)
         self.create_subscription(String, "/perception/fusion/evaluation/metrics", self.cb_fusion_metrics, 10)
         self.create_subscription(String, "/slam/evaluation/metrics", self.cb_mapping_debug, 10)
+        self.create_subscription(String, "/racingbrain/health/system", self.cb_system_health, 10)
 
     def mark(self, topic: str, stamp: Optional[float], extra: Optional[Dict[str, Any]] = None) -> None:
         now = time.time()
@@ -475,6 +478,45 @@ class EvalMonitor(Node):
         data = self.record_timing_metrics(msg, "/slam/evaluation/metrics", "mapping")
         self.mapping_debug_rows.append(data)
 
+    def cb_system_health(self, msg: String) -> None:
+        now = time.time()
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError:
+            data = {"raw": msg.data}
+
+        stamp_raw = data.get("stamp")
+        try:
+            stamp = float(stamp_raw) if stamp_raw is not None else None
+        except (TypeError, ValueError):
+            stamp = None
+
+        components = data.get("components", {}) if isinstance(data.get("components"), dict) else {}
+        row = {
+            "elapsed_wall_sec": now - self.start_wall,
+            "stamp": stamp,
+            "overall_status": data.get("overall_status"),
+            "selected_lidar_backend": data.get("selected_lidar_backend"),
+            "alert_count": len(data.get("alerts", [])) if isinstance(data.get("alerts"), list) else 0,
+            "alerts": json.dumps(data.get("alerts", []), ensure_ascii=False),
+        }
+        for component_name in ("yolo", "lidar", "fusion", "mapping"):
+            component = components.get(component_name, {})
+            row[f"{component_name}_status"] = component.get("status")
+            row[f"{component_name}_rate_hz"] = component.get("rate_hz")
+        if isinstance(components.get("fusion"), dict):
+            row["fusion_unknown_ratio"] = components["fusion"].get("mean_unknown_ratio")
+            row["fusion_force_match_ratio"] = components["fusion"].get("mean_force_match_ratio")
+        if isinstance(components.get("mapping"), dict):
+            row["mapping_stable_cones"] = components["mapping"].get("last_stable_cones")
+            row["mapping_observation_utilization"] = components["mapping"].get("mean_observation_utilization")
+        if isinstance(components.get("lidar"), dict):
+            row["lidar_backend_component"] = components["lidar"].get("backend_component")
+
+        self.health_rows.append(row)
+        self.last_system_health = data
+        self.mark("/racingbrain/health/system", stamp, row)
+
     @staticmethod
     def marker_color_name(marker: Marker) -> str:
         r = float(marker.color.r)
@@ -510,6 +552,7 @@ class EvalMonitor(Node):
             "success": (
                 topic_summaries.get("/perception/fusion/map", {}).get("count", 0) > 0
                 and topic_summaries.get("/global_map", {}).get("count", 0) > 0
+                and topic_summaries.get("/racingbrain/health/system", {}).get("count", 0) > 0
             ),
             "dataset": dataset,
             "bag_metadata": bag_metadata,
@@ -550,6 +593,11 @@ class EvalMonitor(Node):
                 "missed_in_view_total": sum(int(r.get("missed_in_view", 0)) for r in self.mapping_debug_rows),
                 "unknown_observations_total": sum(int(r.get("observations_unknown", 0)) for r in self.mapping_debug_rows),
                 "last": self.mapping_debug_rows[-1] if self.mapping_debug_rows else None,
+            },
+            "system_health": {
+                "frames": len(self.health_rows),
+                "overall_status_counts": dict(Counter(str(r.get("overall_status")) for r in self.health_rows if r.get("overall_status") is not None)),
+                "last": self.last_system_health,
             },
         }
 
@@ -608,6 +656,7 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
     map_metrics = summary.get("map", {})
     trajectory = summary.get("trajectory", {})
     mapping_debug = summary.get("mapping_debug", {})
+    system_health = summary.get("system_health", {})
     processing_time = summary.get("processing_time_ms", {})
 
     def fmt(value: Any, digits: int = 3) -> str:
@@ -650,6 +699,12 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
             f"- LiDAR cones/frame mean: `{fmt(perception.get('lidar_cones_per_frame', {}).get('mean'))}`",
             f"- Fused cones/frame mean: `{fmt(perception.get('fused_cones_per_frame', {}).get('mean'))}`",
             f"- Fused UNKNOWN ratio mean: `{fmt(perception.get('fused_unknown_ratio', {}).get('mean'))}`",
+            "",
+            "## System Health",
+            "",
+            f"- Health frames: `{system_health.get('frames')}`",
+            f"- Health status counts: `{json.dumps(system_health.get('overall_status_counts', {}), ensure_ascii=False)}`",
+            f"- Last overall status: `{(system_health.get('last') or {}).get('overall_status')}`",
             "",
             "## Processing Time",
             "",
@@ -858,6 +913,7 @@ def main() -> int:
         write_csv(log_dir / "map_frames.csv", monitor.map_rows)
         write_csv(log_dir / "odom.csv", monitor.odom_rows)
         write_csv(log_dir / "mapping_debug_frames.csv", monitor.mapping_debug_rows)
+        write_csv(log_dir / "system_health.csv", monitor.health_rows)
         write_csv(log_dir / "processing_times.csv", monitor.timing_rows)
         write_report(log_dir, summary)
         maybe_write_plots(log_dir, monitor)

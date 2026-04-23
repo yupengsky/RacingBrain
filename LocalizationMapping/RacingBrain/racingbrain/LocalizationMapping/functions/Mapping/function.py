@@ -16,7 +16,7 @@ def _enabled(context, value):
     return _perform(context, value).strip().lower() in ("1", "true", "yes", "on")
 
 
-def _setup(context, track, rviz, eval_debug, enabled):
+def _setup(context, track, rviz, eval_debug, health_metrics, enabled):
     if not _enabled(context, enabled):
         return []
 
@@ -28,6 +28,7 @@ def _setup(context, track, rviz, eval_debug, enabled):
                 "track": track,
                 "rviz": rviz,
                 "eval_debug": eval_debug,
+                "health_metrics": health_metrics,
             },
         )
     ]
@@ -37,11 +38,13 @@ def launch_actions(
     track=None,
     rviz=None,
     eval_debug=None,
+    health_metrics=None,
     enabled=None,
 ):
     track = track or LaunchConfiguration("track")
     rviz = rviz or LaunchConfiguration("rviz")
     eval_debug = eval_debug or LaunchConfiguration("eval_debug")
+    health_metrics = health_metrics or LaunchConfiguration("enable_health")
 
     return [
         OpaqueFunction(
@@ -50,6 +53,7 @@ def launch_actions(
                 "track": track,
                 "rviz": rviz,
                 "eval_debug": eval_debug,
+                "health_metrics": health_metrics,
                 "enabled": enabled,
             },
         )

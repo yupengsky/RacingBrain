@@ -109,6 +109,8 @@ private:
 
     ConeSegmentationCFG cfg_;
     bool eval_metrics_enabled_ = false;
+    bool health_metrics_enabled_ = false;
+    bool metrics_enabled_ = false;
 };
 
 #endif // TEST_CONE_SEGMENTATION_HPP

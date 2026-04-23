@@ -52,6 +52,7 @@ def configured_path(parser, section, option):
 
 def generate_launch_description():
     eval_debug = LaunchConfiguration('eval_debug')
+    health_metrics = LaunchConfiguration('health_metrics')
     lidar_backend = LaunchConfiguration('lidar_backend')
     
     # ==========================================
@@ -74,7 +75,8 @@ def generate_launch_description():
             'image_topic': '/camera1/image_raw',  # 你指定的相机话题
             'conf_threshold': 0.5,
             'max_fps': 10.0,
-            'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool)
+            'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool),
+            'runtime_health.enable_metrics': ParameterValue(health_metrics, value_type=bool),
         }]
     )
 
@@ -99,7 +101,8 @@ def generate_launch_description():
             'max_output_boxes': 200,
             'intensity_scale': -1.0,
             'print_latency': ParameterValue(eval_debug, value_type=bool),
-            'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool)
+            'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool),
+            'runtime_health.enable_metrics': ParameterValue(health_metrics, value_type=bool),
         }]
     )
 
@@ -111,7 +114,8 @@ def generate_launch_description():
         condition=IfCondition(PythonExpression(["'", lidar_backend, "' == 'cluster'"])),
         parameters=[{
             'use_csf': False,   # 关闭 CSF
-            'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool)
+            'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool),
+            'runtime_health.enable_metrics': ParameterValue(health_metrics, value_type=bool),
         }]
     )
 
@@ -125,7 +129,7 @@ def generate_launch_description():
         
         fusion_launch = IncludeLaunchDescription(
             PythonLaunchDescriptionSource(fusion_launch_path),
-            launch_arguments={'eval_debug': eval_debug}.items()
+            launch_arguments={'eval_debug': eval_debug, 'health_metrics': health_metrics}.items()
         )
     except Exception as e:
         print(f"Error: 找不到 fs_fusion_box 功能包。请确保它已编译并 source。错误信息: {e}")
@@ -139,6 +143,11 @@ def generate_launch_description():
             'eval_debug',
             default_value='false',
             description='Enable sidecar evaluation metrics publishers in perception nodes.'
+        ),
+        DeclareLaunchArgument(
+            'health_metrics',
+            default_value='false',
+            description='Enable lightweight runtime health metrics publishers in perception nodes.'
         ),
         DeclareLaunchArgument(
             'lidar_backend',

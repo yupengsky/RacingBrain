@@ -24,8 +24,9 @@ The project is now shaped as a real-time localization and mapping system. Low-le
 - ROS 2 Humble bringup for camera, LiDAR, GNSS/INS, fusion, and mapping.
 - GNSS-RTK/INS-aided cone mapping with track-mode configs for acceleration, autocross, and skidpad.
 - LiDAR backend switch: TensorRT PointPillars or legacy clustering.
+- Online health bus for YOLO, LiDAR, fusion, and mapping.
 - Dataset replay smoke tests with topic-level success summaries.
-- Small function folders for perception, mapping, and a reserved planner hook.
+- Small function folders for perception, mapping, health, and a reserved planner hook.
 - One public launch surface for the real-time localization and mapping stack.
 
 ## Architecture
@@ -53,6 +54,7 @@ sequenceDiagram
     participant Fusion as Fusion Box
     participant Mapper as Mapping Node
     participant Map as Global Map
+    participant Health as System Health
 
     Bag->>Perception: /camera1/image_raw
     Bag->>Perception: /lidar_points
@@ -61,6 +63,9 @@ sequenceDiagram
     Bag->>Mapper: /gongji_gnss_ins_64
     Fusion->>Mapper: /perception/fusion/map
     Mapper->>Map: /vehicle_odom + /global_map
+    Perception->>Health: runtime metrics
+    Fusion->>Health: runtime metrics
+    Mapper->>Health: runtime metrics
 ```
 
 ## Repository Layout
@@ -100,6 +105,12 @@ CLI form:
 ros2 run racingbrain racingbrain mapping
 ```
 
+Health is enabled by default on the top-level launch surface and publishes:
+
+```bash
+ros2 topic echo /racingbrain/health/system
+```
+
 Script form:
 
 ```bash
@@ -119,15 +130,16 @@ Latest smoke-test summary:
 
 ```text
 success: true
-/camera1/image_raw:       165
-/lidar_points:             55
-/gongji_gnss_ins_64:      503
-/yolo/cones:               72
-/cone_detection_custom:    29
-/perception/fusion/map:    29
-/global_map:               29
+/camera1/image_raw:       155
+/lidar_points:             52
+/gongji_gnss_ins_64:      506
+/yolo/cones:               73
+/cone_detection_custom:    30
+/perception/fusion/map:    30
+/global_map:               30
+/racingbrain/health/system: 10
 max_fused_cones:           23
-nonempty_global_messages:  28
+nonempty_global_messages:  29
 ```
 
 ## Function Entrypoints
@@ -137,6 +149,7 @@ RacingBrain exposes composable function folders under `LocalizationMapping/Racin
 ```text
 LocalizationMapping/functions/Perception
 LocalizationMapping/functions/Mapping
+LocalizationMapping/functions/Health
 LocalizationMapping/functions/Planning
 LocalizationMapping/functions/LocalizationMappingStack
 ```
@@ -154,6 +167,10 @@ ros2 launch racingbrain localization_mapping.launch.py \
 ros2 launch racingbrain localization_mapping.launch.py \
   lidar_backend:=cluster \
   enable_planning:=false
+
+# Run mapping without the health monitor
+ros2 launch racingbrain localization_mapping.launch.py \
+  enable_health:=false
 ```
 
 ## Tech Stack

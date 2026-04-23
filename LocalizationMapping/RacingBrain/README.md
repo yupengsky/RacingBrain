@@ -7,6 +7,7 @@ RacingBrain
 └── LocalizationMapping
     ├── Perception  -> run_perception + cone detector + fusion
     ├── Mapping     -> GNSS/INS-aided localization and cone-map generation
+    ├── Health      -> unified runtime health bus for perception and mapping
     └── Planning    -> reserved planner interface
 ```
 
@@ -23,6 +24,7 @@ The lower-level implementation lives under:
 ros2 launch racingbrain localization_mapping.launch.py \
   enable_perception:=true \
   enable_mapping:=true \
+  enable_health:=true \
   enable_planning:=false \
   lidar_backend:=pointpillars \
   track:=acceleration
@@ -35,3 +37,4 @@ ros2 run racingbrain racingbrain mapping
 ```
 
 Planning is intentionally a placeholder so the planner can later attach to the same localization and mapping entry point.
+Health is enabled by default and publishes `/racingbrain/health/system`.

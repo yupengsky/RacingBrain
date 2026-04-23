@@ -54,13 +54,13 @@ mkdir -p "${LOG_DIR}"
 
 cleanup() {
   set +e
-  for pid in ${BAG_PID:-} ${PERCEPTION_PID:-} ${MAPPING_PID:-}; do
+  for pid in ${BAG_PID:-} ${STACK_PID:-}; do
     if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
       kill -INT "${pid}" 2>/dev/null || true
     fi
   done
   sleep 2
-  for pid in ${BAG_PID:-} ${PERCEPTION_PID:-} ${MAPPING_PID:-}; do
+  for pid in ${BAG_PID:-} ${STACK_PID:-}; do
     if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
       kill -TERM "${pid}" 2>/dev/null || true
     fi
@@ -76,11 +76,14 @@ echo "LiDAR backend: ${LIDAR_BACKEND}"
 echo "Keep running after success: ${KEEP_RUNNING}"
 echo "Logs: ${LOG_DIR}"
 
-ros2 launch run_perception system_run.launch.py "lidar_backend:=${LIDAR_BACKEND}" >"${LOG_DIR}/perception.log" 2>&1 &
-PERCEPTION_PID=$!
-
-ros2 launch slam slam.launch.py "track:=${TRACK}" "rviz:=${RVIZ}" >"${LOG_DIR}/mapping.log" 2>&1 &
-MAPPING_PID=$!
+ros2 launch racingbrain localization_mapping.launch.py \
+  "track:=${TRACK}" \
+  "rviz:=${RVIZ}" \
+  "lidar_backend:=${LIDAR_BACKEND}" \
+  "enable_planning:=false" \
+  "enable_health:=true" \
+  >"${LOG_DIR}/stack.log" 2>&1 &
+STACK_PID=$!
 
 sleep "${STARTUP_WAIT}"
 
@@ -104,6 +107,7 @@ from gnss_ins_msg.msg import Gnssins64
 from cone_interfaces.msg import ConeArray
 from test_cone_segmentation.msg import ThreeDConeArray
 from drd25_msgs.msg import Map
+from std_msgs.msg import String
 from visualization_msgs.msg import MarkerArray
 
 
@@ -119,6 +123,7 @@ class ChainMonitor(Node):
             "/cone_detection_custom": 0,
             "/perception/fusion/map": 0,
             "/global_map": 0,
+            "/racingbrain/health/system": 0,
         }
         self.first_times = {}
         self.max_yolo_cones = 0
@@ -128,6 +133,9 @@ class ChainMonitor(Node):
         self.nonempty_global_messages = 0
         self.last_fused_stamp = None
         self.last_global_stamp = None
+        self.last_health_status = None
+        self.last_health_alert_count = 0
+        self.last_health_alerts = []
 
         self.create_subscription(Image, "/camera1/image_raw", self.cb("/camera1/image_raw"), 10)
         self.create_subscription(PointCloud2, "/lidar_points", self.cb("/lidar_points"), 10)
@@ -136,6 +144,7 @@ class ChainMonitor(Node):
         self.create_subscription(ThreeDConeArray, "/cone_detection_custom", self.cb_lidar_cones, 10)
         self.create_subscription(Map, "/perception/fusion/map", self.cb_fusion, 10)
         self.create_subscription(MarkerArray, "/global_map", self.cb_global, 10)
+        self.create_subscription(String, "/racingbrain/health/system", self.cb_health, 10)
 
     def mark(self, topic):
         self.counts[topic] += 1
@@ -172,6 +181,21 @@ class ChainMonitor(Node):
                 "nanosec": msg.markers[0].header.stamp.nanosec,
             }
 
+    def cb_health(self, msg):
+        self.mark("/racingbrain/health/system")
+        try:
+            payload = json.loads(msg.data)
+        except json.JSONDecodeError:
+            return
+        self.last_health_status = payload.get("overall_status")
+        alerts = payload.get("alerts") or []
+        if isinstance(alerts, list):
+            self.last_health_alert_count = len(alerts)
+            self.last_health_alerts = alerts
+        else:
+            self.last_health_alert_count = 0
+            self.last_health_alerts = []
+
 
 log_dir = Path(sys.argv[1])
 timeout_sec = float(sys.argv[2])
@@ -185,7 +209,8 @@ while time.time() < deadline:
     rclpy.spin_once(node, timeout_sec=0.1)
     fused_ok = node.counts["/perception/fusion/map"] > 0 and node.max_fused_cones > 0
     global_ok = node.nonempty_global_messages > 0
-    if fused_ok and global_ok:
+    health_ok = node.counts["/racingbrain/health/system"] > 0
+    if fused_ok and global_ok and health_ok:
         if success_since is None:
             success_since = time.time()
         if time.time() - success_since >= 8.0:
@@ -196,7 +221,8 @@ while time.time() < deadline:
 summary = {
     "success": node.counts["/perception/fusion/map"] > 0
     and node.max_fused_cones > 0
-    and node.nonempty_global_messages > 0,
+    and node.nonempty_global_messages > 0
+    and node.counts["/racingbrain/health/system"] > 0,
     "elapsed_sec": round(time.time() - node.start, 3),
     "counts": node.counts,
     "first_times_sec": node.first_times,
@@ -207,6 +233,9 @@ summary = {
     "nonempty_global_messages": node.nonempty_global_messages,
     "last_fused_stamp": node.last_fused_stamp,
     "last_global_stamp": node.last_global_stamp,
+    "last_health_status": node.last_health_status,
+    "last_health_alert_count": node.last_health_alert_count,
+    "last_health_alerts": node.last_health_alerts,
 }
 
 (log_dir / "summary.json").write_text(
@@ -223,11 +252,8 @@ MONITOR_STATUS=$?
 set -e
 
 echo
-echo "--- perception tail ---"
-tail -n 60 "${LOG_DIR}/perception.log" || true
-echo
-echo "--- mapping tail ---"
-tail -n 60 "${LOG_DIR}/mapping.log" || true
+echo "--- stack tail ---"
+tail -n 80 "${LOG_DIR}/stack.log" || true
 echo
 echo "--- bag tail ---"
 tail -n 40 "${LOG_DIR}/bag.log" || true

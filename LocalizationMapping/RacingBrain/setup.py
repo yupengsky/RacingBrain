@@ -24,6 +24,7 @@ setup(
     entry_points={
         "console_scripts": [
             "racingbrain = racingbrain.cli:main",
+            "system_health_monitor = racingbrain.health.monitor:main",
         ],
     },
 )

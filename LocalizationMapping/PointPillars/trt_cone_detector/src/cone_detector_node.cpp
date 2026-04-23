@@ -46,6 +46,7 @@ public:
         this->declare_parameter("marker_topic", "/detected_cones_markers");
         this->declare_parameter("engine_path", "");
         this->declare_parameter("evaluation.enable_debug_metrics", false);
+        this->declare_parameter("runtime_health.enable_metrics", false);
 
         score_thresh_ = this->get_parameter("score_thresh").as_double();
         float big_cone_score_thresh = this->get_parameter("big_cone_score_thresh").as_double();
@@ -59,6 +60,8 @@ public:
         const std::string output_topic = this->get_parameter("output_topic").as_string();
         const std::string marker_topic = this->get_parameter("marker_topic").as_string();
         eval_metrics_enabled_ = this->get_parameter("evaluation.enable_debug_metrics").as_bool();
+        health_metrics_enabled_ = this->get_parameter("runtime_health.enable_metrics").as_bool();
+        metrics_enabled_ = eval_metrics_enabled_ || health_metrics_enabled_;
 
         // ---------- 2. 模型路径区 ----------
         // engine 安装在 share/<package>/models 下，launch 后无需手动写绝对路径。
@@ -128,7 +131,7 @@ public:
         
         marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(marker_topic, 10);
         bbox_pub_ = this->create_publisher<test_cone_segmentation::msg::ThreeDConeArray>(output_topic, 10);
-        if (eval_metrics_enabled_) {
+        if (metrics_enabled_) {
             metrics_pub_ = this->create_publisher<std_msgs::msg::String>("/perception/lidar/evaluation/metrics", 10);
         }
 
@@ -223,7 +226,7 @@ private:
                          int voxel_count,
                          int cone_count,
                          const FrameTiming& timing) {
-        if (!eval_metrics_enabled_ || !metrics_pub_) return;
+        if (!metrics_enabled_ || !metrics_pub_) return;
 
         std_msgs::msg::String msg;
         std::ostringstream out;
@@ -594,6 +597,8 @@ private:
     rclcpp::Publisher<test_cone_segmentation::msg::ThreeDConeArray>::SharedPtr bbox_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr metrics_pub_;
     bool eval_metrics_enabled_ = false;
+    bool health_metrics_enabled_ = false;
+    bool metrics_enabled_ = false;
 };
 
 int main(int argc, char** argv) {

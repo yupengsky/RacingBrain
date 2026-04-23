@@ -38,7 +38,7 @@ ConeSegmentationNode::ConeSegmentationNode() : Node("cone_segmentation_node")
     // 话题名: /cone_detection_custom
     custom_cones_pub_ = this->create_publisher<test_cone_segmentation::msg::ThreeDConeArray>(
         "/cone_detection_custom", 10);
-    if (eval_metrics_enabled_) {
+    if (metrics_enabled_) {
         metrics_pub_ = this->create_publisher<std_msgs::msg::String>("/perception/lidar/evaluation/metrics", 10);
     }
 
@@ -76,6 +76,7 @@ void ConeSegmentationNode::setup_parameters()
     this->declare_parameter<double>("cone_ransac_distance_threshold", cfg_.cone_ransac_distance_threshold);
     this->declare_parameter<int>("cone_ransac_max_iterations", cfg_.cone_ransac_max_iterations);
     this->declare_parameter<bool>("evaluation.enable_debug_metrics", false);
+    this->declare_parameter<bool>("runtime_health.enable_metrics", false);
     
     // 读取参数
     cfg_.use_csf = this->get_parameter("use_csf").as_bool();
@@ -98,6 +99,8 @@ void ConeSegmentationNode::setup_parameters()
     cfg_.cone_ransac_distance_threshold = this->get_parameter("cone_ransac_distance_threshold").as_double();
     cfg_.cone_ransac_max_iterations = this->get_parameter("cone_ransac_max_iterations").as_int();
     eval_metrics_enabled_ = this->get_parameter("evaluation.enable_debug_metrics").as_bool();
+    health_metrics_enabled_ = this->get_parameter("runtime_health.enable_metrics").as_bool();
+    metrics_enabled_ = eval_metrics_enabled_ || health_metrics_enabled_;
 
     cfg_.MIN_CONE_HEIGHT = 0.12;
     cfg_.MAX_CONE_HEIGHT = 0.60;
@@ -134,7 +137,7 @@ void ConeSegmentationNode::process_pointcloud(const sensor_msgs::msg::PointCloud
     int cone_count = 0;
 
     auto publish_metrics = [&](const std::string& event) {
-        if (!eval_metrics_enabled_ || !metrics_pub_) return;
+        if (!metrics_enabled_ || !metrics_pub_) return;
 
         std_msgs::msg::String msg;
         std::ostringstream out;

@@ -46,7 +46,10 @@ public:
         this->declare_parameter("sync_window", 0.1);
         this->declare_parameter("lidar_frame", "hesai_lidar"); 
         this->declare_parameter("evaluation.enable_debug_metrics", false);
+        this->declare_parameter("runtime_health.enable_metrics", false);
         eval_metrics_enabled_ = this->get_parameter("evaluation.enable_debug_metrics").as_bool();
+        health_metrics_enabled_ = this->get_parameter("runtime_health.enable_metrics").as_bool();
+        metrics_enabled_ = eval_metrics_enabled_ || health_metrics_enabled_;
 
         // [强力测试参数] 吸铁石半径 (像素)
         // 只要雷达点投影在相机框中心 60 像素以内，强制上色！
@@ -68,7 +71,7 @@ public:
         // --- 初始化 ---
         marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("fusion/markers", 10);
         map_pub_ = this->create_publisher<drd25_msgs::msg::Map>("fusion/cones", 10);
-        if (eval_metrics_enabled_) {
+        if (metrics_enabled_) {
             metrics_pub_ = this->create_publisher<std_msgs::msg::String>("/perception/fusion/evaluation/metrics", 10);
         }
 
@@ -112,9 +115,10 @@ private:
         int recovered_count = 0;
         int final_count = 0;
         int unknown_count = 0;
+        int force_match_count = 0;
 
         auto publish_metrics = [&](const std::string& event) {
-            if (!eval_metrics_enabled_ || !metrics_pub_) return;
+            if (!metrics_enabled_ || !metrics_pub_) return;
 
             std_msgs::msg::String msg;
             std::ostringstream out;
@@ -133,6 +137,7 @@ private:
                 << ",\"recovered_count\":" << recovered_count
                 << ",\"final_count\":" << final_count
                 << ",\"unknown_count\":" << unknown_count
+                << ",\"force_match_count\":" << force_match_count
                 << ",\"convert_3d_ms\":" << convert_3d_ms
                 << ",\"convert_2d_ms\":" << convert_2d_ms
                 << ",\"parameter_load_ms\":" << parameter_load_ms
@@ -263,6 +268,7 @@ private:
                         std::string class_id = standard_camera_msg->detections[best_match_idx].results[0].hypothesis.class_id;
                         try {
                             current_cones[i].color = std::stoi(class_id);
+                            force_match_count++;
                             // 颜色被吸附了！
                         } catch (...) {}
                     }
@@ -333,6 +339,8 @@ private:
     std::shared_ptr<message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<
         test_cone_segmentation::msg::ThreeDConeArray, cone_interfaces::msg::ConeArray>>> sync_;
     bool eval_metrics_enabled_ = false;
+    bool health_metrics_enabled_ = false;
+    bool metrics_enabled_ = false;
 };
 
 } 

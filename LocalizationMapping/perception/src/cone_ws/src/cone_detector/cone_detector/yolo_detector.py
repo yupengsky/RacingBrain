@@ -62,6 +62,7 @@ class YoloDetectorNode(Node):
         self.declare_parameter("max_fps", 10.0)
         self.declare_parameter("enable_hsv_check", False)
         self.declare_parameter("evaluation.enable_debug_metrics", False)
+        self.declare_parameter("runtime_health.enable_metrics", False)
 
         self.model_path = self.get_parameter("model_path").get_parameter_value().string_value
         self.conf_threshold = float(self.get_parameter("conf_threshold").value)
@@ -69,6 +70,8 @@ class YoloDetectorNode(Node):
         self.max_fps = float(self.get_parameter("max_fps").value)
         self.enable_hsv_check = bool(self.get_parameter("enable_hsv_check").value)
         self.enable_debug_metrics = bool(self.get_parameter("evaluation.enable_debug_metrics").value)
+        self.enable_health_metrics = bool(self.get_parameter("runtime_health.enable_metrics").value)
+        self.metrics_enabled = self.enable_debug_metrics or self.enable_health_metrics
         self.min_period = 1.0 / self.max_fps if self.max_fps > 0.0 else 0.0
 
         if not self.model_path:
@@ -82,7 +85,7 @@ class YoloDetectorNode(Node):
         self.debug_pub = self.create_publisher(Image, "/yolo/debug_image", 10)
         self.cones_pub = self.create_publisher(ConeArray, "/yolo/cones", 10)
         self.metrics_pub = None
-        if self.enable_debug_metrics:
+        if self.metrics_enabled:
             self.metrics_pub = self.create_publisher(String, "/perception/yolo/evaluation/metrics", 10)
         self.image_sub = self.create_subscription(
             Image,
@@ -331,6 +334,8 @@ class YoloDetectorNode(Node):
             "component": "yolo",
             "stamp": self._stamp_sec(image_msg),
             "frame_id": image_msg.header.frame_id,
+            "hsv_checked_count": self.hsv_checked_count,
+            "hsv_mismatch_count": self.hsv_mismatch_count,
             **payload,
         }
         msg.data = json.dumps(payload, sort_keys=True)

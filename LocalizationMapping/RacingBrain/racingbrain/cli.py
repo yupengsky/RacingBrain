@@ -25,6 +25,9 @@ def run_mapping(args):
             "enable_perception": _bool_text(args.perception),
             "enable_mapping": _bool_text(args.mapping),
             "enable_planning": _bool_text(args.planning),
+            "enable_health": _bool_text(args.health),
+            "health_period": args.health_period,
+            "health_stale_timeout": args.health_stale_timeout,
         },
     )
 
@@ -36,8 +39,11 @@ def add_mapping_args(parser):
     parser.add_argument("--eval-debug", action="store_true")
     parser.add_argument("--no-perception", dest="perception", action="store_false")
     parser.add_argument("--no-mapping", dest="mapping", action="store_false")
+    parser.add_argument("--no-health", dest="health", action="store_false")
+    parser.add_argument("--health-period", type=float, default=1.0)
+    parser.add_argument("--health-stale-timeout", type=float, default=3.0)
     parser.add_argument("--planning", action="store_true")
-    parser.set_defaults(perception=True, mapping=True)
+    parser.set_defaults(perception=True, mapping=True, health=True)
 
 
 def main(argv=None):

@@ -16,7 +16,7 @@ def _enabled(context, value):
     return _perform(context, value).strip().lower() in ("1", "true", "yes", "on")
 
 
-def _setup(context, eval_debug, lidar_backend, enabled):
+def _setup(context, eval_debug, health_metrics, lidar_backend, enabled):
     if not _enabled(context, enabled):
         return []
 
@@ -26,6 +26,7 @@ def _setup(context, eval_debug, lidar_backend, enabled):
             "system_run.launch.py",
             {
                 "eval_debug": eval_debug,
+                "health_metrics": health_metrics,
                 "lidar_backend": lidar_backend,
             },
         )
@@ -34,10 +35,12 @@ def _setup(context, eval_debug, lidar_backend, enabled):
 
 def launch_actions(
     eval_debug=None,
+    health_metrics=None,
     lidar_backend=None,
     enabled=None,
 ):
     eval_debug = eval_debug or LaunchConfiguration("eval_debug")
+    health_metrics = health_metrics or LaunchConfiguration("enable_health")
     lidar_backend = lidar_backend or LaunchConfiguration("lidar_backend")
 
     return [
@@ -45,6 +48,7 @@ def launch_actions(
             function=_setup,
             kwargs={
                 "eval_debug": eval_debug,
+                "health_metrics": health_metrics,
                 "lidar_backend": lidar_backend,
                 "enabled": enabled,
             },

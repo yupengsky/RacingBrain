@@ -7,12 +7,18 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     eval_debug = LaunchConfiguration('eval_debug')
+    health_metrics = LaunchConfiguration('health_metrics')
 
     return LaunchDescription([
         DeclareLaunchArgument(
             'eval_debug',
             default_value='false',
             description='Enable JSON timing metrics for offline evaluation.'
+        ),
+        DeclareLaunchArgument(
+            'health_metrics',
+            default_value='false',
+            description='Enable lightweight runtime health metrics for online monitoring.'
         ),
         Node(
             package='trt_cone_detector',
@@ -33,6 +39,7 @@ def generate_launch_description():
                 'intensity_scale': -1.0,
                 'print_latency': ParameterValue(eval_debug, value_type=bool),
                 'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool),
+                'runtime_health.enable_metrics': ParameterValue(health_metrics, value_type=bool),
             }]
         )
     ])

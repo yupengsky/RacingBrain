@@ -17,3 +17,4 @@ Arguments passed through:
 - `track`: `acceleration`, `autocross`, or `skidpad`
 - `rviz`: launch RViz
 - `eval_debug`: enable evaluation metrics publishers
+- `health_metrics`: enable lightweight runtime health metrics publishers

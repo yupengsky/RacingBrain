@@ -4,6 +4,7 @@ Composes the real-time stack:
 
 - Perception
 - Mapping
+- Health
 - Planning placeholder
 
 Primary entry point:

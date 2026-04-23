@@ -91,7 +91,7 @@ public:
         tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);       //广播坐标变换
         path_pub_ = this->create_publisher<nav_msgs::msg::Path>("vehicle_path", 10);
         odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("vehicle_odom", 10); 
-        if (eval_metrics_enabled_) {
+        if (metrics_enabled_) {
             eval_metrics_pub_ = this->create_publisher<std_msgs::msg::String>("/slam/evaluation/metrics", 10);
         }
         path_msg_.header.frame_id = sys_.map_frame;
@@ -261,7 +261,10 @@ private:
 
         // 评估诊断默认关闭；离线评估脚本可通过 launch 参数临时打开。
         this->declare_parameter("evaluation.enable_debug_metrics", false);
+        this->declare_parameter("runtime_health.enable_metrics", false);
         eval_metrics_enabled_ = this->get_parameter("evaluation.enable_debug_metrics").as_bool();
+        health_metrics_enabled_ = this->get_parameter("runtime_health.enable_metrics").as_bool();
+        metrics_enabled_ = eval_metrics_enabled_ || health_metrics_enabled_;
 
         // 回环检测器参数加载
         this->declare_parameter("loop_closure.distance_threshold", 1.5);
@@ -866,14 +869,15 @@ private:
     }
 
     void publishEvaluationMetrics(const builtin_interfaces::msg::Time& stamp) {
-        if (!eval_metrics_enabled_ || !eval_metrics_pub_) return;
+        if (!metrics_enabled_ || !eval_metrics_pub_) return;
 
         std_msgs::msg::String msg;
         std::ostringstream out;
         const double stamp_sec = static_cast<double>(stamp.sec) + static_cast<double>(stamp.nanosec) * 1e-9;
         out << std::fixed << std::setprecision(9);
         out << "{"
-            << "\"stamp\":" << stamp_sec
+            << "\"component\":\"mapping\""
+            << ",\"stamp\":" << stamp_sec
             << ",\"frame_index\":" << eval_stats_.frame_index
             << ",\"track_type\":\"" << track_type_str_ << "\""
             << ",\"observations_total\":" << eval_stats_.observations_total
@@ -887,6 +891,8 @@ private:
             << ",\"rejected_roi\":" << eval_stats_.rejected_roi
             << ",\"total_tracked\":" << eval_stats_.total_tracked
             << ",\"stable_cones\":" << eval_stats_.stable_cones
+            << ",\"observations_used_ratio\":"
+            << (eval_stats_.observations_total > 0 ? static_cast<double>(eval_stats_.observations_used) / static_cast<double>(eval_stats_.observations_total) : 0.0)
             << ",\"map_locked\":" << (map_locked_ ? "true" : "false")
             << ",\"lap_count\":" << lap_count_
             << ",\"speed\":" << current_speed_
@@ -912,6 +918,8 @@ private:
     int lap_count_ = 0;     // 记录车辆行驶了多少圈
     std::atomic<bool> map_locked_{false};       //地图锁
     bool eval_metrics_enabled_ = false;
+    bool health_metrics_enabled_ = false;
+    bool metrics_enabled_ = false;
     long long eval_frame_index_ = 0;
     EvaluationFrameStats eval_stats_;
 

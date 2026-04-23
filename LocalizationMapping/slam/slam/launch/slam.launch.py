@@ -13,6 +13,7 @@ def launch_setup(context):
     track = LaunchConfiguration("track").perform(context)
     rviz = LaunchConfiguration("rviz")
     eval_debug = LaunchConfiguration("eval_debug")
+    health_metrics = LaunchConfiguration("health_metrics")
 
     pkg_share = get_package_share_directory("slam")
 
@@ -30,6 +31,7 @@ def launch_setup(context):
             track_params,
             {
                 "evaluation.enable_debug_metrics": ParameterValue(eval_debug, value_type=bool),
+                "runtime_health.enable_metrics": ParameterValue(health_metrics, value_type=bool),
             },
         ]
     )
@@ -69,6 +71,11 @@ def generate_launch_description():
             "eval_debug",
             default_value="false",
             description="Publish lightweight mapping evaluation metrics"
+        ),
+        DeclareLaunchArgument(
+            "health_metrics",
+            default_value="false",
+            description="Publish lightweight runtime mapping metrics for the system health monitor"
         ),
 
         OpaqueFunction(function=launch_setup)
