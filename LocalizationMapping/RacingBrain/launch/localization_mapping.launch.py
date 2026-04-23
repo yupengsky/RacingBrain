@@ -13,6 +13,10 @@ def generate_launch_description():
     eval_debug = LaunchConfiguration("eval_debug")
     health_period = LaunchConfiguration("health_period")
     health_stale_timeout = LaunchConfiguration("health_stale_timeout")
+    camera_topic = LaunchConfiguration("camera_topic")
+    lidar_topic = LaunchConfiguration("lidar_topic")
+    gnss_topic = LaunchConfiguration("gnss_topic")
+    fusion_calibration_file = LaunchConfiguration("fusion_calibration_file")
     lidar_backend = LaunchConfiguration("lidar_backend")
     track = LaunchConfiguration("track")
     rviz = LaunchConfiguration("rviz")
@@ -26,6 +30,10 @@ def generate_launch_description():
             DeclareLaunchArgument("eval_debug", default_value="false", description="Enable debug evaluation topics."),
             DeclareLaunchArgument("health_period", default_value="1.0", description="System health publish period in seconds."),
             DeclareLaunchArgument("health_stale_timeout", default_value="3.0", description="Mark a component stale when no fresh metrics arrive within this timeout."),
+            DeclareLaunchArgument("camera_topic", default_value="/camera1/image_raw", description="Camera topic for YOLO input."),
+            DeclareLaunchArgument("lidar_topic", default_value="/lidar_points", description="LiDAR point-cloud topic for cone detection."),
+            DeclareLaunchArgument("gnss_topic", default_value="/gongji_gnss_ins_64", description="GNSS/INS topic for mapping."),
+            DeclareLaunchArgument("fusion_calibration_file", default_value="", description="Optional override for the fusion calibration YAML file."),
             DeclareLaunchArgument("lidar_backend", default_value="pointpillars", description="LiDAR backend: pointpillars or cluster."),
             DeclareLaunchArgument("track", default_value="acceleration", description="Track config: acceleration, autocross, or skidpad."),
             DeclareLaunchArgument("rviz", default_value="true", description="Launch RViz with mapping."),
@@ -37,6 +45,10 @@ def generate_launch_description():
                 eval_debug=eval_debug,
                 health_period=health_period,
                 health_stale_timeout=health_stale_timeout,
+                camera_topic=camera_topic,
+                lidar_topic=lidar_topic,
+                gnss_topic=gnss_topic,
+                fusion_calibration_file=fusion_calibration_file,
                 lidar_backend=lidar_backend,
                 track=track,
                 rviz=rviz,

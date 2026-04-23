@@ -652,6 +652,7 @@ def read_bag_metadata(dataset: Optional[str]) -> Dict[str, Any]:
 
 def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
     topics = summary.get("topics", {})
+    scenario = summary.get("scenario", {}) or {}
     perception = summary.get("perception", {})
     map_metrics = summary.get("map", {})
     trajectory = summary.get("trajectory", {})
@@ -671,14 +672,32 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
         "",
         f"- Success: `{summary.get('success')}`",
         f"- Dataset: `{summary.get('dataset')}`",
+        f"- Scenario: `{scenario.get('profile', 'none')}`",
         f"- Elapsed wall time: `{fmt(summary.get('elapsed_wall_sec'))} s`",
         f"- Duplicate threshold: `{fmt(summary.get('duplicate_threshold_m'))} m`",
         "",
+    ]
+    if scenario:
+        lines.extend(
+            [
+                "## Scenario",
+                "",
+                f"- Profile: `{scenario.get('profile')}`",
+                f"- Fault start: `{fmt(scenario.get('fault_start_sec'))} s`",
+                f"- Fault duration: `{fmt(scenario.get('fault_duration_sec'))} s`",
+                f"- Fault injector enabled: `{scenario.get('use_fault_injector')}`",
+                f"- Calibration override: `{scenario.get('fusion_calibration_file')}`",
+                "",
+            ]
+        )
+    lines.extend(
+        [
         "## Topic Health",
         "",
         "| Topic | Count | Wall Hz | Stamp Hz | First Wall s |",
         "|---|---:|---:|---:|---:|",
-    ]
+        ]
+    )
     for topic, stats in topics.items():
         lines.append(
             "| {topic} | {count} | {wall_hz} | {stamp_hz} | {first} |".format(
@@ -876,6 +895,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--log-dir", required=True, help="Directory for evaluation artifacts")
     parser.add_argument("--dataset", default=None, help="Rosbag dataset directory")
+    parser.add_argument("--scenario-file", default=None, help="Optional JSON file describing the fault scenario")
     parser.add_argument("--timeout", type=float, default=90.0, help="Maximum monitor wall time")
     parser.add_argument("--idle-timeout", type=float, default=8.0, help="Stop after no messages for this many seconds")
     parser.add_argument("--duplicate-threshold", type=float, default=0.75, help="Distance threshold for duplicate cone risk")
@@ -887,6 +907,11 @@ def main() -> int:
     log_dir = Path(args.log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
     bag_metadata = read_bag_metadata(args.dataset)
+    scenario = None
+    if args.scenario_file:
+        scenario_path = Path(args.scenario_file)
+        if scenario_path.exists():
+            scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
 
     rclpy.init()
     monitor = EvalMonitor(duplicate_threshold=args.duplicate_threshold)
@@ -902,6 +927,7 @@ def main() -> int:
                 break
     finally:
         summary = monitor.build_summary(args.dataset, bag_metadata)
+        summary["scenario"] = scenario
         (log_dir / "summary.json").write_text(
             json.dumps(summary, indent=2, ensure_ascii=False),
             encoding="utf-8",

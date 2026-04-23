@@ -22,9 +22,11 @@ ConeSegmentationNode::ConeSegmentationNode() : Node("cone_segmentation_node")
 {
     setup_parameters();
     
+    const auto input_topic = this->get_parameter("input_topic").as_string();
+
     // 订阅雷达话题 (QoS=10 兼容性最好)
     pc_subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        "/lidar_points", 
+        input_topic, 
         10, 
         std::bind(&ConeSegmentationNode::topic_callback, this, std::placeholders::_1));
 
@@ -71,6 +73,7 @@ void ConeSegmentationNode::setup_parameters()
     this->declare_parameter<double>("voxel_size", cfg_.voxel_size);
     this->declare_parameter<double>("horizontal_distance_threshold", cfg_.horizontal_distance_threshold);
     this->declare_parameter<int>("min_cluster_size", cfg_.min_cluster_size);
+    this->declare_parameter<std::string>("input_topic", "/lidar_points");
     
     // 锥桶拟合参数
     this->declare_parameter<double>("cone_ransac_distance_threshold", cfg_.cone_ransac_distance_threshold);

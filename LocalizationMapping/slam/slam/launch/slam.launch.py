@@ -14,6 +14,7 @@ def launch_setup(context):
     rviz = LaunchConfiguration("rviz")
     eval_debug = LaunchConfiguration("eval_debug")
     health_metrics = LaunchConfiguration("health_metrics")
+    gnss_topic = LaunchConfiguration("gnss_topic")
 
     pkg_share = get_package_share_directory("slam")
 
@@ -32,6 +33,7 @@ def launch_setup(context):
             {
                 "evaluation.enable_debug_metrics": ParameterValue(eval_debug, value_type=bool),
                 "runtime_health.enable_metrics": ParameterValue(health_metrics, value_type=bool),
+                "system.gnss_topic": gnss_topic,
             },
         ]
     )
@@ -76,6 +78,11 @@ def generate_launch_description():
             "health_metrics",
             default_value="false",
             description="Publish lightweight runtime mapping metrics for the system health monitor"
+        ),
+        DeclareLaunchArgument(
+            "gnss_topic",
+            default_value="/gongji_gnss_ins_64",
+            description="GNSS/INS topic for mapping"
         ),
 
         OpaqueFunction(function=launch_setup)

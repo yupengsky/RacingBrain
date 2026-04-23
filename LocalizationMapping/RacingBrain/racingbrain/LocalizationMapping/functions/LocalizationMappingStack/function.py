@@ -14,6 +14,10 @@ def launch_actions(
     eval_debug,
     health_period,
     health_stale_timeout,
+    camera_topic,
+    lidar_topic,
+    gnss_topic,
+    fusion_calibration_file,
     lidar_backend,
     track,
     rviz,
@@ -25,6 +29,9 @@ def launch_actions(
         perception_actions(
             eval_debug=eval_debug,
             health_metrics=enable_health,
+            camera_topic=camera_topic,
+            lidar_topic=lidar_topic,
+            fusion_calibration_file=fusion_calibration_file,
             lidar_backend=lidar_backend,
             enabled=enable_perception,
         )
@@ -35,6 +42,7 @@ def launch_actions(
             rviz=rviz,
             eval_debug=eval_debug,
             health_metrics=enable_health,
+            gnss_topic=gnss_topic,
             enabled=enable_mapping,
         )
     )

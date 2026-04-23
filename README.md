@@ -25,6 +25,7 @@ The project is now shaped as a real-time localization and mapping system. Low-le
 - GNSS-RTK/INS-aided cone mapping with track-mode configs for acceleration, autocross, and skidpad.
 - LiDAR backend switch: TensorRT PointPillars or legacy clustering.
 - Online health bus for YOLO, LiDAR, fusion, and mapping.
+- Replay fault injection and reliability benchmarks for degraded sensor experiments.
 - Dataset replay smoke tests with topic-level success summaries.
 - Small function folders for perception, mapping, health, and a reserved planner hook.
 - One public launch surface for the real-time localization and mapping stack.
@@ -140,6 +141,20 @@ success: true
 /racingbrain/health/system: 10
 max_fused_cones:           23
 nonempty_global_messages:  29
+```
+
+Replay-time fault experiments use the evaluation wrapper plus a fault profile:
+
+```bash
+LIDAR_BACKEND=cluster FAULT_PROFILE=camera_blank \
+  ./scripts/run_dataset_mapping_eval.sh
+```
+
+Batch reliability benchmarks are available through:
+
+```bash
+SCENARIOS="none camera_blank camera_blur fusion_calibration_bias" \
+  ./scripts/run_dataset_fault_benchmark.sh
 ```
 
 ## Function Entrypoints

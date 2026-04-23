@@ -2,7 +2,7 @@ import os
 from configparser import ConfigParser
 from pathlib import Path
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, TimerAction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -50,9 +50,39 @@ def configured_path(parser, section, option):
         print(f"Warning: configured path does not exist: {path}")
     return str(path)
 
+
+def _perform(context, value):
+    if hasattr(value, "perform"):
+        return value.perform(context)
+    return str(value)
+
+
+def build_fusion_launch(context, eval_debug, health_metrics, fusion_calibration_file):
+    try:
+        fusion_pkg_share = get_package_share_directory('fs_fusion_box')
+        fusion_launch_path = os.path.join(fusion_pkg_share, 'launch', 'fusion_box.launch.py')
+        default_fusion_calibration = os.path.join(fusion_pkg_share, 'config', 'calibration.yaml')
+        calibration_file = _perform(context, fusion_calibration_file).strip() or default_fusion_calibration
+        return [
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(fusion_launch_path),
+                launch_arguments={
+                    'eval_debug': _perform(context, eval_debug),
+                    'health_metrics': _perform(context, health_metrics),
+                    'calibration_file': calibration_file,
+                }.items()
+            )
+        ]
+    except Exception as e:
+        print(f"Error: 找不到 fs_fusion_box 功能包。请确保它已编译并 source。错误信息: {e}")
+        return []
+
 def generate_launch_description():
     eval_debug = LaunchConfiguration('eval_debug')
     health_metrics = LaunchConfiguration('health_metrics')
+    camera_topic = LaunchConfiguration('camera_topic')
+    lidar_topic = LaunchConfiguration('lidar_topic')
+    fusion_calibration_file = LaunchConfiguration('fusion_calibration_file')
     lidar_backend = LaunchConfiguration('lidar_backend')
     
     # ==========================================
@@ -72,7 +102,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'model_path': model_path,
-            'image_topic': '/camera1/image_raw',  # 你指定的相机话题
+            'image_topic': camera_topic,
             'conf_threshold': 0.5,
             'max_fps': 10.0,
             'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool),
@@ -90,7 +120,7 @@ def generate_launch_description():
         output='screen',
         condition=IfCondition(PythonExpression(["'", lidar_backend, "' == 'pointpillars'"])),
         parameters=[{
-            'input_topic': '/lidar_points',
+            'input_topic': lidar_topic,
             'output_topic': '/cone_detection_custom',
             'marker_topic': '/detected_cones_markers',
             'score_thresh': 0.25,
@@ -113,6 +143,7 @@ def generate_launch_description():
         output='screen',
         condition=IfCondition(PythonExpression(["'", lidar_backend, "' == 'cluster'"])),
         parameters=[{
+            'input_topic': lidar_topic,
             'use_csf': False,   # 关闭 CSF
             'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool),
             'runtime_health.enable_metrics': ParameterValue(health_metrics, value_type=bool),
@@ -123,17 +154,11 @@ def generate_launch_description():
     # 3. 配置 融合节点 (引用已安装的 fs_fusion_box)
     # ==========================================
     # 只要 fs_fusion_box 编译并 source 过，这里就能找到
-    try:
-        fusion_pkg_share = get_package_share_directory('fs_fusion_box')
-        fusion_launch_path = os.path.join(fusion_pkg_share, 'launch', 'fusion_box.launch.py')
-        
-        fusion_launch = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(fusion_launch_path),
-            launch_arguments={'eval_debug': eval_debug, 'health_metrics': health_metrics}.items()
-        )
-    except Exception as e:
-        print(f"Error: 找不到 fs_fusion_box 功能包。请确保它已编译并 source。错误信息: {e}")
-        return LaunchDescription([])
+    default_fusion_calibration = os.path.join(
+        get_package_share_directory('fs_fusion_box'),
+        'config',
+        'calibration.yaml'
+    )
 
     # ==========================================
     # 4. 组合启动
@@ -150,6 +175,21 @@ def generate_launch_description():
             description='Enable lightweight runtime health metrics publishers in perception nodes.'
         ),
         DeclareLaunchArgument(
+            'camera_topic',
+            default_value='/camera1/image_raw',
+            description='Camera topic for YOLO input.'
+        ),
+        DeclareLaunchArgument(
+            'lidar_topic',
+            default_value='/lidar_points',
+            description='LiDAR topic for the selected cone-detection backend.'
+        ),
+        DeclareLaunchArgument(
+            'fusion_calibration_file',
+            default_value=default_fusion_calibration,
+            description='Optional override for the fusion calibration YAML file.'
+        ),
+        DeclareLaunchArgument(
             'lidar_backend',
             default_value='pointpillars',
             description='LiDAR cone detector backend: pointpillars or cluster.'
@@ -163,5 +203,17 @@ def generate_launch_description():
         cluster_lidar_node,
         
         # 3. 延迟 2 秒启动融合 (等待传感器节点就绪)
-        TimerAction(period=2.0, actions=[fusion_launch])
+        TimerAction(
+            period=2.0,
+            actions=[
+                OpaqueFunction(
+                    function=build_fusion_launch,
+                    kwargs={
+                        'eval_debug': eval_debug,
+                        'health_metrics': health_metrics,
+                        'fusion_calibration_file': fusion_calibration_file,
+                    },
+                )
+            ],
+        )
     ])
