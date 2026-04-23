@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sidecar evaluator for the DRD26 perception-to-SLAM chain.
+"""Sidecar evaluator for the RacingBrain perception-to-mapping chain.
 
 The monitor subscribes to runtime ROS topics and writes self-consistency metrics
 without changing the online control path. It intentionally avoids ground-truth
@@ -226,7 +226,7 @@ class EvalMonitor(Node):
         self.fusion_rows: List[Dict[str, Any]] = []
         self.map_rows: List[Dict[str, Any]] = []
         self.odom_rows: List[Dict[str, Any]] = []
-        self.slam_debug_rows: List[Dict[str, Any]] = []
+        self.mapping_debug_rows: List[Dict[str, Any]] = []
         self.timing_rows: List[Dict[str, Any]] = []
 
         self.yolo_counts: List[int] = []
@@ -256,7 +256,7 @@ class EvalMonitor(Node):
         self.create_subscription(String, "/perception/yolo/evaluation/metrics", self.cb_yolo_metrics, 10)
         self.create_subscription(String, "/perception/lidar/evaluation/metrics", self.cb_lidar_metrics, 10)
         self.create_subscription(String, "/perception/fusion/evaluation/metrics", self.cb_fusion_metrics, 10)
-        self.create_subscription(String, "/slam/evaluation/metrics", self.cb_slam_debug, 10)
+        self.create_subscription(String, "/slam/evaluation/metrics", self.cb_mapping_debug, 10)
 
     def mark(self, topic: str, stamp: Optional[float], extra: Optional[Dict[str, Any]] = None) -> None:
         now = time.time()
@@ -471,9 +471,9 @@ class EvalMonitor(Node):
     def cb_fusion_metrics(self, msg: String) -> None:
         self.record_timing_metrics(msg, "/perception/fusion/evaluation/metrics", "fusion")
 
-    def cb_slam_debug(self, msg: String) -> None:
-        data = self.record_timing_metrics(msg, "/slam/evaluation/metrics", "slam")
-        self.slam_debug_rows.append(data)
+    def cb_mapping_debug(self, msg: String) -> None:
+        data = self.record_timing_metrics(msg, "/slam/evaluation/metrics", "mapping")
+        self.mapping_debug_rows.append(data)
 
     @staticmethod
     def marker_color_name(marker: Marker) -> str:
@@ -541,15 +541,15 @@ class EvalMonitor(Node):
                 "gnss_speed_mps": summarize(self.gnss_speeds),
                 "odom_speed_mps": summarize(self.odom_speeds),
             },
-            "slam_debug": {
-                "enabled": bool(self.slam_debug_rows),
-                "frames": len(self.slam_debug_rows),
-                "created_cones_total": sum(int(r.get("created_cones", 0)) for r in self.slam_debug_rows),
-                "matched_cones_total": sum(int(r.get("matched_cones", 0)) for r in self.slam_debug_rows),
-                "removed_cones_total": sum(int(r.get("removed_cones", 0)) for r in self.slam_debug_rows),
-                "missed_in_view_total": sum(int(r.get("missed_in_view", 0)) for r in self.slam_debug_rows),
-                "unknown_observations_total": sum(int(r.get("observations_unknown", 0)) for r in self.slam_debug_rows),
-                "last": self.slam_debug_rows[-1] if self.slam_debug_rows else None,
+            "mapping_debug": {
+                "enabled": bool(self.mapping_debug_rows),
+                "frames": len(self.mapping_debug_rows),
+                "created_cones_total": sum(int(r.get("created_cones", 0)) for r in self.mapping_debug_rows),
+                "matched_cones_total": sum(int(r.get("matched_cones", 0)) for r in self.mapping_debug_rows),
+                "removed_cones_total": sum(int(r.get("removed_cones", 0)) for r in self.mapping_debug_rows),
+                "missed_in_view_total": sum(int(r.get("missed_in_view", 0)) for r in self.mapping_debug_rows),
+                "unknown_observations_total": sum(int(r.get("observations_unknown", 0)) for r in self.mapping_debug_rows),
+                "last": self.mapping_debug_rows[-1] if self.mapping_debug_rows else None,
             },
         }
 
@@ -607,7 +607,7 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
     perception = summary.get("perception", {})
     map_metrics = summary.get("map", {})
     trajectory = summary.get("trajectory", {})
-    slam_debug = summary.get("slam_debug", {})
+    mapping_debug = summary.get("mapping_debug", {})
     processing_time = summary.get("processing_time_ms", {})
 
     def fmt(value: Any, digits: int = 3) -> str:
@@ -618,7 +618,7 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
         return str(value)
 
     lines = [
-        "# DRD26 SLAM Evaluation Report",
+        "# RacingBrain Mapping Evaluation Report",
         "",
         f"- Success: `{summary.get('success')}`",
         f"- Dataset: `{summary.get('dataset')}`",
@@ -685,14 +685,14 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
             f"- Start-end distance: `{fmt(trajectory.get('start_end_distance_m'))} m`",
             f"- GNSS speed mean: `{fmt(trajectory.get('gnss_speed_mps', {}).get('mean'))} m/s`",
             "",
-            "## SLAM Debug",
+            "## Mapping Debug",
             "",
-            f"- Debug topic enabled: `{slam_debug.get('enabled')}`",
-            f"- Debug frames: `{slam_debug.get('frames')}`",
-            f"- Created cones total: `{slam_debug.get('created_cones_total')}`",
-            f"- Matched cones total: `{slam_debug.get('matched_cones_total')}`",
-            f"- Removed cones total: `{slam_debug.get('removed_cones_total')}`",
-            f"- Unknown observations total: `{slam_debug.get('unknown_observations_total')}`",
+            f"- Debug topic enabled: `{mapping_debug.get('enabled')}`",
+            f"- Debug frames: `{mapping_debug.get('frames')}`",
+            f"- Created cones total: `{mapping_debug.get('created_cones_total')}`",
+            f"- Matched cones total: `{mapping_debug.get('matched_cones_total')}`",
+            f"- Removed cones total: `{mapping_debug.get('removed_cones_total')}`",
+            f"- Unknown observations total: `{mapping_debug.get('unknown_observations_total')}`",
             "",
             "## Notes",
             "",
@@ -857,7 +857,7 @@ def main() -> int:
         write_csv(log_dir / "fusion_frames.csv", monitor.fusion_rows)
         write_csv(log_dir / "map_frames.csv", monitor.map_rows)
         write_csv(log_dir / "odom.csv", monitor.odom_rows)
-        write_csv(log_dir / "slam_debug_frames.csv", monitor.slam_debug_rows)
+        write_csv(log_dir / "mapping_debug_frames.csv", monitor.mapping_debug_rows)
         write_csv(log_dir / "processing_times.csv", monitor.timing_rows)
         write_report(log_dir, summary)
         maybe_write_plots(log_dir, monitor)

@@ -1,0 +1,15 @@
+# slam/slam/config/skidpad.yaml
+/**:
+  ros__parameters:
+    track_type: "skidpad"
+
+    loop_closure:
+      min_stable_cones: 5    # 保存第一帧地图要求的最小稳定锥桶数
+      max_wait_time: 3.0     # 保存第一帧地图最大等待时间（秒
+      distance_threshold: 1.5   # 几何距离阈值
+      approach_angle_threshold: 35.0     # 运动朝向阈值
+      min_approach_speed: 0.8    # 最低接近速度
+      min_consecutive_detections: 5    # 连续满足回环条件帧数最小值
+      min_time_between_detections: 3.0  # 触发回环冷却时间
+      history_buffer_size: 10      # 历史轨迹缓存
+      min_lap_time: 20.0    # 触发回环最小圏时
