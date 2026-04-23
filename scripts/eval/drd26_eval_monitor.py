@@ -157,6 +157,21 @@ def summarize_processing_times(rows: Iterable[Dict[str, Any]]) -> Dict[str, Dict
     }
 
 
+def summarize_component_metrics(rows: Iterable[Dict[str, Any]], component: str, keys: Iterable[str]) -> Dict[str, Dict[str, Optional[float]]]:
+    grouped: Dict[str, List[float]] = {key: [] for key in keys}
+    for row in rows:
+        if str(row.get("component") or "") != component:
+            continue
+        for key in keys:
+            try:
+                value = float(row.get(key))
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(value):
+                grouped[key].append(value)
+    return {key: summarize(values) for key, values in grouped.items()}
+
+
 class TopicStats:
     def __init__(self) -> None:
         self.count = 0
@@ -240,6 +255,7 @@ class EvalMonitor(Node):
         self.final_map_points: List[Tuple[float, float]] = []
         self.final_map_color_counts: Counter[str] = Counter()
         self.last_system_health: Optional[Dict[str, Any]] = None
+        self.last_non_stale_system_health: Optional[Dict[str, Any]] = None
 
         self.odom_start: Optional[Tuple[float, float]] = None
         self.odom_last: Optional[Tuple[float, float]] = None
@@ -507,6 +523,13 @@ class EvalMonitor(Node):
         if isinstance(components.get("fusion"), dict):
             row["fusion_unknown_ratio"] = components["fusion"].get("mean_unknown_ratio")
             row["fusion_force_match_ratio"] = components["fusion"].get("mean_force_match_ratio")
+            row["fusion_alignment_state"] = components["fusion"].get("alignment_state")
+            row["fusion_consistency_score"] = components["fusion"].get("mean_consistency_score")
+            row["fusion_calibration_drift_score"] = components["fusion"].get("mean_calibration_drift_score")
+            row["fusion_projection_error_px"] = components["fusion"].get("mean_projection_error_px")
+            row["fusion_stamp_delta_ms"] = components["fusion"].get("mean_abs_camera_lidar_stamp_delta_ms")
+            row["fusion_low_iou_ratio"] = components["fusion"].get("mean_low_iou_ratio")
+            row["fusion_valid_projection_ratio"] = components["fusion"].get("mean_valid_projection_ratio")
         if isinstance(components.get("mapping"), dict):
             row["mapping_stable_cones"] = components["mapping"].get("last_stable_cones")
             row["mapping_observation_utilization"] = components["mapping"].get("mean_observation_utilization")
@@ -515,6 +538,8 @@ class EvalMonitor(Node):
 
         self.health_rows.append(row)
         self.last_system_health = data
+        if str(data.get("overall_status")) not in {"stale", "missing"}:
+            self.last_non_stale_system_health = data
         self.mark("/racingbrain/health/system", stamp, row)
 
     @staticmethod
@@ -564,6 +589,24 @@ class EvalMonitor(Node):
                 for name, values in sorted(latency_by_name.items())
             },
             "processing_time_ms": summarize_processing_times(self.timing_rows),
+            "fusion_consistency": summarize_component_metrics(
+                self.timing_rows,
+                "fusion",
+                (
+                    "abs_camera_lidar_stamp_delta_ms",
+                    "valid_projection_ratio",
+                    "iou_match_ratio",
+                    "unmatched_camera_ratio",
+                    "low_iou_ratio",
+                    "mean_nearest_camera_error_px",
+                    "p95_nearest_camera_error_px",
+                    "mean_best_iou",
+                    "unknown_ratio",
+                    "force_match_ratio",
+                    "consistency_score",
+                    "calibration_drift_score",
+                ),
+            ),
             "perception": {
                 "yolo_cones_per_frame": summarize(self.yolo_counts),
                 "lidar_cones_per_frame": summarize(self.lidar_cone_counts),
@@ -598,6 +641,7 @@ class EvalMonitor(Node):
                 "frames": len(self.health_rows),
                 "overall_status_counts": dict(Counter(str(r.get("overall_status")) for r in self.health_rows if r.get("overall_status") is not None)),
                 "last": self.last_system_health,
+                "last_non_stale": self.last_non_stale_system_health,
             },
         }
 
@@ -659,6 +703,7 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
     mapping_debug = summary.get("mapping_debug", {})
     system_health = summary.get("system_health", {})
     processing_time = summary.get("processing_time_ms", {})
+    fusion_consistency = summary.get("fusion_consistency", {})
 
     def fmt(value: Any, digits: int = 3) -> str:
         if value is None:
@@ -718,12 +763,17 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
             f"- LiDAR cones/frame mean: `{fmt(perception.get('lidar_cones_per_frame', {}).get('mean'))}`",
             f"- Fused cones/frame mean: `{fmt(perception.get('fused_cones_per_frame', {}).get('mean'))}`",
             f"- Fused UNKNOWN ratio mean: `{fmt(perception.get('fused_unknown_ratio', {}).get('mean'))}`",
+            f"- Fusion consistency score mean: `{fmt(fusion_consistency.get('consistency_score', {}).get('mean'))}`",
+            f"- Fusion calibration drift score mean: `{fmt(fusion_consistency.get('calibration_drift_score', {}).get('mean'))}`",
+            f"- Fusion projection error mean: `{fmt(fusion_consistency.get('mean_nearest_camera_error_px', {}).get('mean'))} px`",
+            f"- Fusion camera-LiDAR stamp delta mean: `{fmt(fusion_consistency.get('abs_camera_lidar_stamp_delta_ms', {}).get('mean'))} ms`",
             "",
             "## System Health",
             "",
             f"- Health frames: `{system_health.get('frames')}`",
             f"- Health status counts: `{json.dumps(system_health.get('overall_status_counts', {}), ensure_ascii=False)}`",
             f"- Last overall status: `{(system_health.get('last') or {}).get('overall_status')}`",
+            f"- Last non-stale status: `{(system_health.get('last_non_stale') or {}).get('overall_status')}`",
             "",
             "## Processing Time",
             "",

@@ -323,6 +323,13 @@ class RuntimeHealthMonitor(Node):
         history = self.histories["fusion"]
         latest = history.latest()
         final_counts = history.numeric_series("final_count")
+        abs_stamp_deltas = history.numeric_series("abs_camera_lidar_stamp_delta_ms")
+        valid_projection_ratios = history.numeric_series("valid_projection_ratio")
+        low_iou_ratios = history.numeric_series("low_iou_ratio")
+        projection_errors = history.numeric_series("mean_nearest_camera_error_px")
+        consistency_scores = history.numeric_series("consistency_score")
+        calibration_drift_scores = history.numeric_series("calibration_drift_score")
+        magnet_radii = history.numeric_series("magnet_radius_px")
         unknown_ratios = []
         recovered_ratios = []
         force_match_ratios = []
@@ -336,6 +343,27 @@ class RuntimeHealthMonitor(Node):
                 recovered_ratios.append(recovered_count / final_count)
                 force_match_ratios.append(force_match_count / final_count)
 
+        mean_abs_stamp_delta_ms = mean(abs_stamp_deltas)
+        mean_projection_error_px = mean(projection_errors)
+        mean_consistency_score = mean(consistency_scores)
+        mean_calibration_drift_score = mean(calibration_drift_scores)
+        mean_magnet_radius_px = mean(magnet_radii) or 60.0
+        alignment_state = "unknown"
+        if latest is not None:
+            if mean_abs_stamp_delta_ms is not None and mean_abs_stamp_delta_ms > 120.0:
+                alignment_state = "time_offset"
+            elif (
+                mean_calibration_drift_score is not None
+                and mean_calibration_drift_score > 0.65
+                and mean_projection_error_px is not None
+                and mean_projection_error_px > mean_magnet_radius_px
+            ):
+                alignment_state = "drift_suspect"
+            elif mean_consistency_score is not None and mean_consistency_score < 0.45:
+                alignment_state = "degraded"
+            else:
+                alignment_state = "ok"
+
         info.update(
             {
                 "mean_final_count": mean(final_counts),
@@ -343,13 +371,38 @@ class RuntimeHealthMonitor(Node):
                 "mean_unknown_ratio": mean(unknown_ratios),
                 "mean_recovered_ratio": mean(recovered_ratios),
                 "mean_force_match_ratio": mean(force_match_ratios),
+                "mean_abs_camera_lidar_stamp_delta_ms": mean_abs_stamp_delta_ms,
+                "mean_valid_projection_ratio": mean(valid_projection_ratios),
+                "mean_low_iou_ratio": mean(low_iou_ratios),
+                "mean_projection_error_px": mean_projection_error_px,
+                "p95_projection_error_px": percentile(projection_errors, 0.95),
+                "mean_consistency_score": mean_consistency_score,
+                "last_consistency_score": None if latest is None else as_float(latest.get("consistency_score")),
+                "mean_calibration_drift_score": mean_calibration_drift_score,
+                "last_calibration_drift_score": None if latest is None else as_float(latest.get("calibration_drift_score")),
+                "alignment_state": alignment_state,
             }
         )
 
         if info["status"] == "ok":
-            if (info["mean_unknown_ratio"] or 0.0) > 0.75:
+            if alignment_state == "time_offset":
+                info["status"] = "warn"
+                info["alerts"].append("fusion_time_offset_high")
+            elif alignment_state == "drift_suspect":
+                info["status"] = "warn"
+                info["alerts"].append("fusion_calibration_drift_suspect")
+            elif alignment_state == "degraded":
+                info["status"] = "warn"
+                info["alerts"].append("fusion_consistency_low")
+            elif (info["mean_unknown_ratio"] or 0.0) > 0.75:
                 info["status"] = "warn"
                 info["alerts"].append("fusion_unknown_ratio_high")
+            elif (
+                info["mean_projection_error_px"] is not None
+                and info["mean_projection_error_px"] > mean_magnet_radius_px * 1.5
+            ):
+                info["status"] = "warn"
+                info["alerts"].append("fusion_projection_residual_high")
             elif (info["mean_final_count"] or 0.0) < 1.0 and len(history.payloads) >= 8:
                 info["status"] = "warn"
                 info["alerts"].append("fusion_output_low")

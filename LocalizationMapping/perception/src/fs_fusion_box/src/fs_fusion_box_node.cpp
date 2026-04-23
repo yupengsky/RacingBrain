@@ -1,9 +1,13 @@
 #include <Eigen/Dense> 
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <iomanip>
+#include <limits>
 #include <rclcpp/rclcpp.hpp>
 #include <sstream>
+#include <vector>
 #include <message_filters/subscriber.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/synchronizer.h>
@@ -37,6 +41,61 @@ double stamp_to_sec(const std_msgs::msg::Header& header)
 {
     return static_cast<double>(header.stamp.sec) + static_cast<double>(header.stamp.nanosec) * 1e-9;
 }
+
+double clamp01(double value)
+{
+    if (!std::isfinite(value)) return 0.0;
+    return std::max(0.0, std::min(1.0, value));
+}
+
+double ratio_or_nan(double numerator, double denominator)
+{
+    if (denominator <= 0.0) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    return numerator / denominator;
+}
+
+double mean_or_nan(const std::vector<double>& values)
+{
+    if (values.empty()) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    double sum = 0.0;
+    for (double value : values) {
+        sum += value;
+    }
+    return sum / static_cast<double>(values.size());
+}
+
+double percentile_or_nan(std::vector<double> values, double fraction)
+{
+    if (values.empty()) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    std::sort(values.begin(), values.end());
+    if (values.size() == 1) {
+        return values.front();
+    }
+    const double index = (static_cast<double>(values.size()) - 1.0) * fraction;
+    const auto lo = static_cast<size_t>(std::floor(index));
+    const auto hi = static_cast<size_t>(std::ceil(index));
+    if (lo == hi) {
+        return values[lo];
+    }
+    const double weight = index - static_cast<double>(lo);
+    return values[lo] * (1.0 - weight) + values[hi] * weight;
+}
+
+std::string json_number(double value)
+{
+    if (!std::isfinite(value)) {
+        return "null";
+    }
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(9) << value;
+    return out.str();
+}
 }  // namespace
 
 class FusionNode : public rclcpp::Node {
@@ -55,6 +114,7 @@ public:
         // 只要雷达点投影在相机框中心 60 像素以内，强制上色！
         // 这能无视外参的轻微偏差
         this->declare_parameter("force_match_radius", 60.0); 
+        this->declare_parameter("iou_match_threshold", 0.3);
 
         // [内参]
         this->declare_parameter("image_width", 640);
@@ -116,6 +176,28 @@ private:
         int final_count = 0;
         int unknown_count = 0;
         int force_match_count = 0;
+        int iou_match_count = 0;
+        int unmatched_camera_count = 0;
+        int association_sample_count = 0;
+        int low_iou_count = 0;
+        double sync_window_ms = this->get_parameter("sync_window").as_double() * 1000.0;
+        double iou_match_threshold = this->get_parameter("iou_match_threshold").as_double();
+        double magnet_radius = this->get_parameter("force_match_radius").as_double();
+        double stamp_delta_ms = (stamp_to_sec(custom_camera_msg->header) - stamp_to_sec(custom_lidar_msg->header)) * 1000.0;
+        double abs_stamp_delta_ms = std::abs(stamp_delta_ms);
+        double valid_projection_ratio = std::numeric_limits<double>::quiet_NaN();
+        double iou_match_ratio = std::numeric_limits<double>::quiet_NaN();
+        double unmatched_camera_ratio = std::numeric_limits<double>::quiet_NaN();
+        double low_iou_ratio = std::numeric_limits<double>::quiet_NaN();
+        double mean_nearest_camera_error_px = std::numeric_limits<double>::quiet_NaN();
+        double p95_nearest_camera_error_px = std::numeric_limits<double>::quiet_NaN();
+        double mean_best_iou = std::numeric_limits<double>::quiet_NaN();
+        double min_best_iou = std::numeric_limits<double>::quiet_NaN();
+        double unknown_ratio = std::numeric_limits<double>::quiet_NaN();
+        double recovered_ratio = std::numeric_limits<double>::quiet_NaN();
+        double force_match_ratio = std::numeric_limits<double>::quiet_NaN();
+        double consistency_score = std::numeric_limits<double>::quiet_NaN();
+        double calibration_drift_score = std::numeric_limits<double>::quiet_NaN();
 
         auto publish_metrics = [&](const std::string& event) {
             if (!metrics_enabled_ || !metrics_pub_) return;
@@ -138,6 +220,28 @@ private:
                 << ",\"final_count\":" << final_count
                 << ",\"unknown_count\":" << unknown_count
                 << ",\"force_match_count\":" << force_match_count
+                << ",\"iou_match_count\":" << iou_match_count
+                << ",\"unmatched_camera_count\":" << unmatched_camera_count
+                << ",\"association_sample_count\":" << association_sample_count
+                << ",\"low_iou_count\":" << low_iou_count
+                << ",\"sync_window_ms\":" << json_number(sync_window_ms)
+                << ",\"camera_lidar_stamp_delta_ms\":" << json_number(stamp_delta_ms)
+                << ",\"abs_camera_lidar_stamp_delta_ms\":" << json_number(abs_stamp_delta_ms)
+                << ",\"valid_projection_ratio\":" << json_number(valid_projection_ratio)
+                << ",\"iou_match_ratio\":" << json_number(iou_match_ratio)
+                << ",\"unmatched_camera_ratio\":" << json_number(unmatched_camera_ratio)
+                << ",\"low_iou_ratio\":" << json_number(low_iou_ratio)
+                << ",\"mean_nearest_camera_error_px\":" << json_number(mean_nearest_camera_error_px)
+                << ",\"p95_nearest_camera_error_px\":" << json_number(p95_nearest_camera_error_px)
+                << ",\"mean_best_iou\":" << json_number(mean_best_iou)
+                << ",\"min_best_iou\":" << json_number(min_best_iou)
+                << ",\"unknown_ratio\":" << json_number(unknown_ratio)
+                << ",\"recovered_ratio\":" << json_number(recovered_ratio)
+                << ",\"force_match_ratio\":" << json_number(force_match_ratio)
+                << ",\"consistency_score\":" << json_number(consistency_score)
+                << ",\"calibration_drift_score\":" << json_number(calibration_drift_score)
+                << ",\"iou_match_threshold\":" << json_number(iou_match_threshold)
+                << ",\"magnet_radius_px\":" << json_number(magnet_radius)
                 << ",\"convert_3d_ms\":" << convert_3d_ms
                 << ",\"convert_2d_ms\":" << convert_2d_ms
                 << ",\"parameter_load_ms\":" << parameter_load_ms
@@ -210,8 +314,59 @@ private:
         for (const auto& box : proj_boxes) {
             if (box.valid) valid_projected_count++;
         }
-        auto fusion_result = fuse_measurements(proj_boxes, standard_lidar_msg, standard_camera_msg);
+        valid_projection_ratio = ratio_or_nan(valid_projected_count, lidar_count);
+
+        std::vector<double> nearest_camera_errors_px;
+        std::vector<double> best_ious;
+        for (const auto& pbox : proj_boxes) {
+            if (!pbox.valid || standard_camera_msg->detections.empty()) {
+                continue;
+            }
+            const double proj_cx = static_cast<double>(pbox.rect.x) + static_cast<double>(pbox.rect.width) * 0.5;
+            const double proj_cy = static_cast<double>(pbox.rect.y) + static_cast<double>(pbox.rect.height) * 0.5;
+            double best_dist = std::numeric_limits<double>::infinity();
+            double best_iou = 0.0;
+
+            for (const auto& det : standard_camera_msg->detections) {
+                const double cam_cx = det.bbox.center.position.x;
+                const double cam_cy = det.bbox.center.position.y;
+                const double dist = std::hypot(proj_cx - cam_cx, proj_cy - cam_cy);
+                best_dist = std::min(best_dist, dist);
+
+                cv::Rect cam_rect(
+                    det.bbox.center.position.x - det.bbox.size_x / 2.0,
+                    det.bbox.center.position.y - det.bbox.size_y / 2.0,
+                    det.bbox.size_x,
+                    det.bbox.size_y
+                );
+                best_iou = std::max(best_iou, calculate_overlap(pbox.rect, cam_rect));
+            }
+
+            if (std::isfinite(best_dist)) {
+                nearest_camera_errors_px.push_back(best_dist);
+            }
+            best_ious.push_back(best_iou);
+            if (best_iou < iou_match_threshold) {
+                low_iou_count++;
+            }
+        }
+        association_sample_count = static_cast<int>(best_ious.size());
+        mean_nearest_camera_error_px = mean_or_nan(nearest_camera_errors_px);
+        p95_nearest_camera_error_px = percentile_or_nan(nearest_camera_errors_px, 0.95);
+        mean_best_iou = mean_or_nan(best_ious);
+        min_best_iou = best_ious.empty() ? std::numeric_limits<double>::quiet_NaN() : *std::min_element(best_ious.begin(), best_ious.end());
+        low_iou_ratio = ratio_or_nan(low_iou_count, association_sample_count);
+
+        auto fusion_result = fuse_measurements(proj_boxes, standard_lidar_msg, standard_camera_msg, iou_match_threshold);
         fused_count = static_cast<int>(fusion_result.fused_cones.size());
+        unmatched_camera_count = static_cast<int>(fusion_result.unmatched_camera_indices.size());
+        unmatched_camera_ratio = ratio_or_nan(unmatched_camera_count, camera_count);
+        for (const auto& cone : fusion_result.fused_cones) {
+            if (cone.color != drd25_msgs::msg::Cone::UNKNOWN) {
+                iou_match_count++;
+            }
+        }
+        iou_match_ratio = ratio_or_nan(iou_match_count, lidar_count);
         project_fuse_ms = elapsed_ms(project_fuse_start);
 
         // 5. 补全 (检测远距离)
@@ -224,7 +379,6 @@ private:
         // ==========================================
         // [新增] 强力吸铁石：修复近处灰色圆柱
         // ==========================================
-        double magnet_radius = this->get_parameter("force_match_radius").as_double();
         std::vector<drd25_msgs::msg::Cone>& current_cones = fusion_result.fused_cones;
 
         // 遍历所有已经是“灰色(Unknown)”的雷达锥筒
@@ -284,6 +438,37 @@ private:
         for (const auto& cone : final_cones) {
             if (cone.color == drd25_msgs::msg::Cone::UNKNOWN) unknown_count++;
         }
+        unknown_ratio = ratio_or_nan(unknown_count, final_count);
+        recovered_ratio = ratio_or_nan(recovered_count, final_count);
+        force_match_ratio = ratio_or_nan(force_match_count, final_count);
+
+        const double time_quality = clamp01(1.0 - abs_stamp_delta_ms / std::max(1.0, sync_window_ms));
+        const double projection_quality = clamp01(std::isfinite(valid_projection_ratio) ? valid_projection_ratio : 0.0);
+        const double pixel_quality = std::isfinite(mean_nearest_camera_error_px)
+            ? clamp01(1.0 - mean_nearest_camera_error_px / std::max(1.0, 2.0 * magnet_radius))
+            : 0.0;
+        const double output_quality = clamp01(1.0 - (std::isfinite(unknown_ratio) ? unknown_ratio : 1.0));
+        const double force_quality = clamp01(1.0 - (std::isfinite(force_match_ratio) ? force_match_ratio : 0.0));
+        consistency_score = clamp01(
+            0.25 * time_quality +
+            0.20 * projection_quality +
+            0.25 * pixel_quality +
+            0.15 * output_quality +
+            0.15 * force_quality
+        );
+
+        const double residual_risk = std::isfinite(mean_nearest_camera_error_px)
+            ? clamp01(mean_nearest_camera_error_px / std::max(1.0, magnet_radius))
+            : 0.0;
+        const double low_iou_risk = std::isfinite(low_iou_ratio) ? clamp01(low_iou_ratio) : 0.0;
+        const double force_risk = std::isfinite(force_match_ratio) ? clamp01(force_match_ratio) : 0.0;
+        const double time_risk = clamp01(abs_stamp_delta_ms / std::max(1.0, sync_window_ms));
+        calibration_drift_score = clamp01(
+            0.45 * residual_risk +
+            0.30 * low_iou_risk +
+            0.15 * force_risk +
+            0.10 * time_risk
+        );
 
         const auto publish_start = SteadyClock::now();
         drd25_msgs::msg::Map map_msg;

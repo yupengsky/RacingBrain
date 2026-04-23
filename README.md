@@ -24,7 +24,7 @@ The project is now shaped as a real-time localization and mapping system. Low-le
 - ROS 2 Humble bringup for camera, LiDAR, GNSS/INS, fusion, and mapping.
 - GNSS-RTK/INS-aided cone mapping with track-mode configs for acceleration, autocross, and skidpad.
 - LiDAR backend switch: TensorRT PointPillars or legacy clustering.
-- Online health bus for YOLO, LiDAR, fusion, and mapping.
+- Online health bus for YOLO, LiDAR, fusion, mapping, and camera-LiDAR consistency.
 - Replay fault injection and reliability benchmarks for degraded sensor experiments.
 - Dataset replay smoke tests with topic-level success summaries.
 - Small function folders for perception, mapping, health, and a reserved planner hook.
@@ -156,6 +156,11 @@ Batch reliability benchmarks are available through:
 SCENARIOS="none camera_blank camera_blur fusion_calibration_bias" \
   ./scripts/run_dataset_fault_benchmark.sh
 ```
+
+The benchmark report includes fusion consistency signals such as camera-LiDAR
+stamp offset, projection residual, low-IoU ratio, consistency score, and
+calibration-drift score. These are designed to turn replay degradation into
+inspectable evidence before adding automatic fallback logic.
 
 ## Function Entrypoints
 

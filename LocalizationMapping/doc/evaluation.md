@@ -75,7 +75,9 @@ Important artifacts:
 - `topic_rates.csv`: topic counts and observed rates.
 - `latency.csv`: header-stamp deltas between adjacent stages.
 - `processing_times.csv`: per-frame processing-time JSON from YOLO, LiDAR clustering,
-  fusion, and mapping when evaluation debug is enabled.
+  fusion, and mapping when evaluation debug is enabled. Fusion rows also include
+  camera-LiDAR consistency fields such as stamp offset, projection residual,
+  best-IoU quality, consistency score, and calibration-drift score.
 - `fusion_frames.csv`: per-frame fused cone counts, colors, unknown ratio, and duplicate risk.
 - `map_frames.csv`: per-frame stable global map counts and nearest-neighbor statistics.
 - `odom.csv`: local trajectory samples and cumulative odometry length.
@@ -89,6 +91,6 @@ Important artifacts:
 
 Current metrics are self-consistency and runtime metrics. They quantify chain health,
 timing, fusion quality, map stability, duplicate risk, trajectory closure indicators,
-and the aggregated status of the new online health bus.
+camera-LiDAR alignment quality, and the aggregated status of the online health bus.
 They are not absolute accuracy metrics unless annotated cone positions or a reference
 trajectory are added later.

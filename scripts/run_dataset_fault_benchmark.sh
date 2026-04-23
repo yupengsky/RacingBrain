@@ -77,6 +77,10 @@ for scenario in scenarios:
         "last_health_status": None,
         "final_stable_cones": None,
         "fused_unknown_ratio_mean": None,
+        "fusion_consistency_score_mean": None,
+        "fusion_calibration_drift_score_mean": None,
+        "fusion_projection_error_px_mean": None,
+        "fusion_stamp_delta_ms_mean": None,
         "lidar_total_ms_mean": None,
         "fusion_total_ms_mean": None,
         "mapping_sync_callback_ms_mean": None,
@@ -84,14 +88,21 @@ for scenario in scenarios:
     if summary_path.exists():
         data = json.loads(summary_path.read_text(encoding="utf-8"))
         processing = data.get("processing_time_ms", {})
+        fusion_consistency = data.get("fusion_consistency", {})
+        system_health = data.get("system_health") or {}
+        last_health = system_health.get("last_non_stale") or system_health.get("last") or {}
         lidar_metrics = processing.get("lidar_cluster") or processing.get("pointpillars") or {}
         mapping_metrics = processing.get("mapping") or {}
         row.update(
             {
                 "success": bool(data.get("success")),
-                "last_health_status": ((data.get("system_health") or {}).get("last") or {}).get("overall_status"),
+                "last_health_status": last_health.get("overall_status"),
                 "final_stable_cones": ((data.get("map") or {}).get("final_stable_cones")),
                 "fused_unknown_ratio_mean": ((data.get("perception") or {}).get("fused_unknown_ratio") or {}).get("mean"),
+                "fusion_consistency_score_mean": (fusion_consistency.get("consistency_score") or {}).get("mean"),
+                "fusion_calibration_drift_score_mean": (fusion_consistency.get("calibration_drift_score") or {}).get("mean"),
+                "fusion_projection_error_px_mean": (fusion_consistency.get("mean_nearest_camera_error_px") or {}).get("mean"),
+                "fusion_stamp_delta_ms_mean": (fusion_consistency.get("abs_camera_lidar_stamp_delta_ms") or {}).get("mean"),
                 "lidar_total_ms_mean": (lidar_metrics.get("total_ms") or {}).get("mean"),
                 "fusion_total_ms_mean": ((processing.get("fusion") or {}).get("total_ms") or {}).get("mean"),
                 "mapping_sync_callback_ms_mean": (mapping_metrics.get("sync_callback_ms") or {}).get("mean"),
@@ -111,8 +122,8 @@ lines = [
     f"- Scenarios: `{', '.join(scenarios)}`",
     f"- Summary CSV: `{csv_path}`",
     "",
-    "| Scenario | Success | Health | Stable Cones | Fused UNKNOWN Mean | LiDAR Mean ms | Fusion Mean ms | Mapping Sync Mean ms |",
-    "|---|---|---|---:|---:|---:|---:|---:|",
+    "| Scenario | Success | Health | Stable Cones | UNKNOWN Mean | Consistency | Drift | Projection px | Stamp ms |",
+    "|---|---|---|---:|---:|---:|---:|---:|---:|",
 ]
 
 def fmt(value):
@@ -124,7 +135,7 @@ def fmt(value):
 
 for row in rows:
     lines.append(
-        "| {scenario} | {success} | {last_health_status} | {final_stable_cones} | {fused_unknown_ratio_mean} | {lidar_total_ms_mean} | {fusion_total_ms_mean} | {mapping_sync_callback_ms_mean} |".format(
+        "| {scenario} | {success} | {last_health_status} | {final_stable_cones} | {fused_unknown_ratio_mean} | {fusion_consistency_score_mean} | {fusion_calibration_drift_score_mean} | {fusion_projection_error_px_mean} | {fusion_stamp_delta_ms_mean} |".format(
             **{k: fmt(v) for k, v in row.items()}
         )
     )
