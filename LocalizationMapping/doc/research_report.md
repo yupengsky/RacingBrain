@@ -33,6 +33,31 @@ insight is that deep learning is treated as a high-performance but fallible
 subsystem. The project therefore adds monitors and conservative map interfaces
 around it.
 
+## 2.5 Recent References Worth Keeping
+
+These newer references fit the project direction naturally:
+
+- [Robustness Evaluation of Localization Techniques for Autonomous Racing (2024)](https://arxiv.org/abs/2401.07658):
+  highlights that racing localization must be judged under slip and aggressive
+  dynamics, not only under nominal logs.
+- [Resilient Sensor Fusion Under Adverse Sensor Failures via Multi-Modal Expert Fusion (CVPR 2025)](https://openaccess.thecvf.com/content/CVPR2025/html/Park_Resilient_Sensor_Fusion_Under_Adverse_Sensor_Failures_via_Multi-Modal_Expert_CVPR_2025_paper.html):
+  suggests modality-quality-aware routing rather than one monolithic fusion path.
+- [Cost-Sensitive Uncertainty-Based Failure Recognition for Object Detection (UAI 2024)](https://proceedings.mlr.press/v244/kassem-sbeyti24a.html):
+  suggests that failure recognition should depend on downstream cost, not only on
+  detector confidence.
+- [Perceive With Confidence (CoRL 2025)](https://proceedings.mlr.press/v270/dixit25a.html):
+  suggests calibrated uncertainty as a bridge from perception outputs to
+  planner-level safety guarantees.
+- [A re-calibration method for object detection with multi-modal alignment bias in autonomous driving (2024)](https://arxiv.org/abs/2405.16848):
+  supports the current calibration-drift monitor and points toward online
+  re-calibration as a future module.
+- [Can't Slow Me Down: Learning Robust and Hardware-Adaptive Object Detectors against Latency Attacks for Edge Devices (CVPR 2025)](https://openaccess.thecvf.com/content/CVPR2025/html/Wang_Cant_Slow_Me_Down_Learning_Robust_and_Hardware-Adaptive_Object_Detectors_CVPR_2025_paper.html):
+  is a reminder that real-time robustness is not only about perception accuracy,
+  but also about compute-time collapse and cascading latency failures.
+- [Curvature-Integrated MPCC Local Trajectory Planning Method (2025)](https://arxiv.org/abs/2502.03695):
+  makes the next step clear once the track graph is stable: convert it into a
+  racing-aware local planner with curvature-sensitive speed targets.
+
 ## 3. Current System Claim
 
 RacingBrain now has a reliability-aware perception-to-map path:
@@ -72,6 +97,25 @@ These numbers are self-consistency evidence, not ground-truth accuracy. A later
 research report should add annotated cone positions or surveyed track geometry to
 measure absolute map error.
 
+## 4.5 Current Mainline Progress Evaluation
+
+The current mainline should be viewed as follows:
+
+| Direction | Status | Comment |
+|---|---|---|
+| Real-time perception-to-map chain | Strong | Already runnable, benchmarked, and inspectable |
+| Reliability-aware perception fallback | Strong | Backend arbitration and health bus are in place |
+| Failure-to-map protection | Strong | Risk gate and map-pollution evaluation already form a coherent story |
+| Planning-facing representation | Medium | Sparse track graph is landed, but not yet a real racing planner |
+| Absolute localization/mapping accuracy benchmark | Medium-weak | Self-consistency is strong; ground-truth error is still missing |
+| Online calibration correction | Medium-weak | Drift is monitored, but not yet corrected online |
+| End-to-end racing performance story | Medium | The control/planning side is not the bottleneck yet, but it is still incomplete |
+
+So the project is already attractive as an engineering research prototype. Its
+weak point is no longer "the system is old". The remaining gap is that the
+current story ends at a conservative planning interface instead of a full
+closed-loop racing stack.
+
 ## 5. Next Research Commits
 
 Good next experiments should stay close to the racing task:
@@ -86,6 +130,8 @@ Good next experiments should stay close to the racing task:
    method that respects cone color, ordering, and expected track width.
 5. Feed the sparse track graph into a first local planner, while keeping the
    current planning input state as a safety gate.
+6. Add latency-aware failure budgeting so that perception failures include
+   compute collapse, not only semantic mismatch or calibration drift.
 
 ## 6. How to Present It
 

@@ -9,6 +9,11 @@
 </p>
 
 <p align="center">
+  <a href="README.md"><strong>English</strong></a> ·
+  <a href="README.zh-CN.md"><strong>简体中文</strong></a>
+</p>
+
+<p align="center">
   <a href="#quick-start"><img alt="ROS 2 Humble" src="https://img.shields.io/badge/ROS%202-Humble-22314E?logo=ros"></a>
   <a href="#mapping-status"><img alt="Mapping verified" src="https://img.shields.io/badge/Mapping-dataset%20verified-00A676"></a>
   <a href="#architecture"><img alt="Architecture" src="https://img.shields.io/badge/Architecture-Realtime%20Mapping-0F766E"></a>
@@ -54,6 +59,25 @@ legacy mapping stack into a reliability-aware intelligent racing system:
 | Mapping protection | Risk-aware gate and confidence map layers | Prevents transient perception failure from becoming long-lived map pollution |
 | Evaluation | Fault injection and A/B map-pollution benchmark | Shows reliability claims with replay evidence instead of screenshots |
 | Planning interface | Sparse track graph from stable cones | Keeps downstream planning input conservative and inspectable |
+
+## Visual Results
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="assets/results/replay-trajectory-and-map.png" alt="Replay trajectory and final stable cone map" width="100%">
+      <p align="center"><sub>Replay trajectory with final stable cone map.</sub></p>
+    </td>
+    <td width="50%">
+      <img src="assets/results/replay-cone-growth.png" alt="Fused cone count and stable cone growth" width="100%">
+      <p align="center"><sub>Stable cone count grows online instead of appearing all at once.</sub></p>
+    </td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="assets/results/gate-ablation.svg" alt="Mapping gate ablation" width="100%">
+</p>
 
 ## Architecture
 
@@ -208,6 +232,18 @@ The generated `mapping_gate_comparison.csv` reports whether the risk-aware gate
 reduces map pollution: candidate residue, duplicate pairs, unstable cone
 creation, and the replay stability score.
 
+## Why It Feels Fresh
+
+The mainline is already beyond a plain replay-only student stack:
+
+- It treats learned perception as useful but fallible, instead of assuming the
+  detector output is always trustworthy.
+- It exposes runtime evidence for failure judgement: backend selection,
+  calibration drift signals, latency, consistency, and health state.
+- It protects the long-lived map instead of only scoring the detector.
+- It has started the next bridge toward racing: a conservative planning-facing
+  sparse track graph derived from the stable cone map.
+
 ## Function Entrypoints
 
 RacingBrain exposes composable function folders under
@@ -305,6 +341,28 @@ The research-facing entry point is
 It explains the current insight chain, the paper-driven ideas behind the
 reliability modules, and the next experiments that would make this project
 stronger for intelligent racing and embodied autonomous systems.
+
+## Recent Literature Hooks
+
+These recent papers are especially relevant to the current direction:
+
+- [Robustness Evaluation of Localization Techniques for Autonomous Racing (2024)](https://arxiv.org/abs/2401.07658):
+  racing localization should be judged under slip and aggressive dynamics, not
+  only under nominal conditions.
+- [Resilient Sensor Fusion Under Adverse Sensor Failures via Multi-Modal Expert Fusion (CVPR 2025)](https://openaccess.thecvf.com/content/CVPR2025/html/Park_Resilient_Sensor_Fusion_Under_Adverse_Sensor_Failures_via_Multi-Modal_Expert_CVPR_2025_paper.html):
+  robustness comes from modality-aware fallback rather than one fused path.
+- [Cost-Sensitive Uncertainty-Based Failure Recognition for Object Detection (UAI 2024)](https://proceedings.mlr.press/v244/kassem-sbeyti24a.html):
+  failure judgement should be budgeted and cost-sensitive, not a single fixed
+  confidence threshold.
+- [Perceive With Confidence (CoRL 2025)](https://proceedings.mlr.press/v270/dixit25a.html):
+  uncertainty should be calibrated so downstream planning can inherit a safety
+  interpretation.
+- [A re-calibration method for object detection with multi-modal alignment bias in autonomous driving (2024)](https://arxiv.org/abs/2405.16848):
+  small calibration bias can seriously hurt fusion detection and should be
+  monitored or corrected online.
+- [Curvature-Integrated MPCC for Autonomous Racing (2025)](https://arxiv.org/abs/2502.03695):
+  once the sparse track graph is stable enough, curvature-aware local planning
+  becomes a natural next step for lap-time improvement.
 
 ## Notes
 
