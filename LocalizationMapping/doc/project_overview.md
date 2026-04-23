@@ -2,9 +2,11 @@
 
 ## Purpose
 
-`RacingBrain` is a ROS 2 Humble workspace for GNSS/INS-aided real-time cone mapping, now with
-an imported perception stack beside it. The mapping node consumes GNSS/INS and fused cone
-detections, then maintains and visualizes a stable global cone map.
+`RacingBrain` is a ROS 2 Humble workspace for GNSS/INS-aided real-time cone
+mapping with a reliability-aware perception stack beside it. The mapping node
+consumes GNSS/INS and fused cone detections, then maintains stable, candidate,
+and rejected-observation map layers before exposing a sparse track graph to the
+planning interface.
 
 ## Packages
 
@@ -22,6 +24,8 @@ detections, then maintains and visualizes a stable global cone map.
   `drd25_msgs/Map` on `/perception/fusion/map`.
 - `perception/src/run_perception`: launch package that starts camera, LiDAR, and
   fusion nodes together.
+- `RacingBrain`: top-level launch, health monitor, LiDAR backend arbiter, and
+  optional sparse track graph builder.
 
 ## Main Node
 
@@ -33,7 +37,10 @@ detections, then maintains and visualizes a stable global cone map.
 - Synchronizes GNSS/INS with perceived cones for map updates.
 - Maintains global cones with color gating, Mahalanobis association, a Kalman
   style position update, and existence scoring.
-- Publishes stable cones as RViz mesh markers.
+- Publishes stable cones as RViz mesh markers and candidate/rejected layers for
+  diagnostics.
+- Publishes optional planning-facing track graph markers when the planning
+  interface is enabled.
 
 ## Track Modes
 

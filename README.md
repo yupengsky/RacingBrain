@@ -15,9 +15,17 @@
   <a href="#tech-stack"><img alt="C++ and Python" src="https://img.shields.io/badge/C%2B%2B17%20%7C%20Python-ROS%202-2563EB"></a>
 </p>
 
-RacingBrain focuses on the part of an autonomous race car that must be fast, inspectable, and dependable before planning and control can make sense: perception, sensor fusion, GNSS/INS-aided localization, and real-time cone-map generation.
+RacingBrain focuses on the part of an autonomous race car that must be fast,
+inspectable, and dependable before planning and control can make sense:
+perception, sensor fusion, GNSS/INS-aided localization, real-time cone-map
+generation, and a planning-facing sparse track graph.
 
-The project is now shaped as a real-time localization and mapping system. Low-level control assets are intentionally out of scope; localization/mapping and control should live as separate systems with a clear interface between them.
+The core question is practical and research-oriented: how can a high-speed
+vehicle use fast learned perception while still knowing when that perception is
+unsafe to trust? RacingBrain treats reliability as a runtime signal. It can
+fall back from PointPillars to clustering, score camera-LiDAR consistency, gate
+map updates under degraded perception, and quantify whether bad detections are
+polluting the global map.
 
 ## Highlights
 
@@ -27,10 +35,25 @@ The project is now shaped as a real-time localization and mapping system. Low-le
 - Online health bus for YOLO, LiDAR, fusion, mapping, and camera-LiDAR consistency.
 - Runtime perception failure state for learning-path degradation and LiDAR backend arbitration.
 - Risk-aware mapping gate that downweights unreliable observations and can freeze new-cone creation.
+- Stable/candidate/rejected map layers for planning safety and replay diagnosis.
+- Sparse cone-track graph and centerline preview interface for future planners.
 - Replay fault injection and reliability benchmarks for degraded sensor experiments.
 - Dataset replay smoke tests with topic-level success summaries.
-- Small function folders for perception, mapping, health, and a reserved planner hook.
+- Small function folders for perception, mapping, health, planning, and full-stack bringup.
 - One public launch surface for the real-time localization and mapping stack.
+
+## Research Spine
+
+RacingBrain is not a parameter-polishing demo. The current mainline turns a
+legacy mapping stack into a reliability-aware intelligent racing system:
+
+| Layer | Engineering move | Research value |
+|---|---|---|
+| Learning perception | PointPillars/YOLO path with clustering fallback | Fast learned detection without assuming learned models never fail |
+| Failure judgement | Online backend, health, and camera-LiDAR consistency state | Converts distribution shift and calibration drift into runtime evidence |
+| Mapping protection | Risk-aware gate and confidence map layers | Prevents transient perception failure from becoming long-lived map pollution |
+| Evaluation | Fault injection and A/B map-pollution benchmark | Shows reliability claims with replay evidence instead of screenshots |
+| Planning interface | Sparse track graph from stable cones | Keeps downstream planning input conservative and inspectable |
 
 ## Architecture
 
@@ -44,7 +67,7 @@ flowchart LR
     Fusion --> Mapper
     Mapper --> Pose["vehicle pose"]
     Mapper --> Map["global cone map"]
-    Pose --> Planner["planner hook"]
+    Pose --> Planner["sparse track graph"]
     Map --> Planner
 ```
 
@@ -66,6 +89,7 @@ sequenceDiagram
     Bag->>Mapper: /gongji_gnss_ins_64
     Fusion->>Mapper: /perception/fusion/map
     Mapper->>Map: /vehicle_odom + /global_map
+    Map->>Planner: /planning/track_graph
     Perception->>Health: runtime metrics
     Fusion->>Health: runtime metrics
     Mapper->>Health: runtime metrics
@@ -145,6 +169,15 @@ max_fused_cones:           23
 nonempty_global_messages:  29
 ```
 
+Recent reliability and planning-interface checks:
+
+| Check | Command scope | Result |
+|---|---|---|
+| ROS build | `./scripts/build_ros_clean.sh` | 11 packages built |
+| Mapping gate A/B | `SCENARIOS=none GATE_VARIANTS="true false"` | stable cones 20/20, candidate residue 7 vs 11, stability score 0.721 vs 0.545 |
+| Map confidence layers | `LIDAR_BACKEND=auto MAPPING_GATE=true` | `/global_map`, `/mapping/candidate_cones`, `/mapping/rejected_observations` all 133 frames |
+| Planning interface | `ENABLE_PLANNING=true LIDAR_BACKEND=auto` | `/planning/track_graph` 138 frames, planning state 138 frames, ready 84 frames |
+
 Replay-time fault experiments use the evaluation wrapper plus a fault profile:
 
 ```bash
@@ -177,14 +210,15 @@ creation, and the replay stability score.
 
 ## Function Entrypoints
 
-RacingBrain exposes composable function folders under `LocalizationMapping/RacingBrain/racingbrain`:
+RacingBrain exposes composable function folders under
+`LocalizationMapping/RacingBrain/racingbrain/LocalizationMapping/functions`:
 
 ```text
-LocalizationMapping/functions/Perception
-LocalizationMapping/functions/Mapping
-LocalizationMapping/functions/Health
-LocalizationMapping/functions/Planning
-LocalizationMapping/functions/LocalizationMappingStack
+Perception
+Mapping
+Health
+Planning
+LocalizationMappingStack
 ```
 
 Examples:
@@ -209,6 +243,11 @@ ros2 launch racingbrain localization_mapping.launch.py \
 # Run mapping without the health monitor
 ros2 launch racingbrain localization_mapping.launch.py \
   enable_health:=false
+
+# Enable the sparse track graph interface
+ros2 launch racingbrain localization_mapping.launch.py \
+  lidar_backend:=auto \
+  enable_planning:=true
 ```
 
 When `lidar_backend:=auto` is used, PointPillars is treated as the preferred
@@ -253,11 +292,19 @@ and reports whether enough paired boundary points exist for a planner to consume
 
 ## Roadmap
 
-- Add a trajectory planner behind `LocalizationMapping/functions/Planning`.
-- Define a clean localization-to-planning/control interface.
+- Add a racing trajectory planner behind the current sparse track graph interface.
+- Define and document the localization/mapping-to-control contract.
 - Add public sample bags or lightweight replay fixtures.
 - Add CI for message generation, launch parsing, and mapping smoke tests.
 - Add a formal open-source license before public release.
+
+## Research Report
+
+The research-facing entry point is
+[`LocalizationMapping/doc/research_report.md`](LocalizationMapping/doc/research_report.md).
+It explains the current insight chain, the paper-driven ideas behind the
+reliability modules, and the next experiments that would make this project
+stronger for intelligent racing and embodied autonomous systems.
 
 ## Notes
 
