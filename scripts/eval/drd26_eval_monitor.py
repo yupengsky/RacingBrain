@@ -238,7 +238,13 @@ class EvalMonitor(Node):
         super().__init__("drd26_eval_monitor")
         self.start_wall = time.time()
         self.last_msg_wall: Optional[float] = None
+        self.last_data_wall: Optional[float] = None
         self.duplicate_threshold = duplicate_threshold
+        self.internal_keepalive_topics = {
+            "/racingbrain/health/system",
+            "/racingbrain/perception/failure_state",
+            "/racingbrain/planning/input_state",
+        }
 
         self.topic_stats: Dict[str, TopicStats] = defaultdict(TopicStats)
         self.last_stamp_by_name: Dict[str, float] = {}
@@ -298,6 +304,8 @@ class EvalMonitor(Node):
     def mark(self, topic: str, stamp: Optional[float], extra: Optional[Dict[str, Any]] = None) -> None:
         now = time.time()
         self.last_msg_wall = now
+        if topic not in self.internal_keepalive_topics:
+            self.last_data_wall = now
         self.topic_stats[topic].mark(now, stamp)
         if stamp is not None:
             self.last_stamp_by_name[topic] = stamp
@@ -709,6 +717,11 @@ class EvalMonitor(Node):
         for row in self.latency_rows:
             latency_by_name[str(row["name"])].append(float(row["delta_sec"]))
 
+        live_failure_rows = [
+            row for row in self.failure_state_rows
+            if bool(row.get("primary_available")) or bool(row.get("fallback_available"))
+        ]
+
         final_duplicate_pairs = duplicate_pair_count(self.final_map_points, self.duplicate_threshold)
         final_nnd = nearest_distances(self.final_map_points)
         start_end_distance = None
@@ -801,6 +814,10 @@ class EvalMonitor(Node):
                 "gnss_speed_mps": summarize(self.gnss_speeds),
                 "odom_speed_mps": summarize(self.odom_speeds),
             },
+            "activity_window": {
+                "last_message_wall_sec": None if self.last_msg_wall is None else self.last_msg_wall - self.start_wall,
+                "last_data_wall_sec": None if self.last_data_wall is None else self.last_data_wall - self.start_wall,
+            },
             "mapping_debug": {
                 "enabled": bool(self.mapping_debug_rows),
                 "frames": mapping_debug_frames,
@@ -859,8 +876,13 @@ class EvalMonitor(Node):
             },
             "perception_failure": {
                 "frames": len(self.failure_state_rows),
-                "active_backend_counts": dict(Counter(str(r.get("active_lidar_backend")) for r in self.failure_state_rows if r.get("active_lidar_backend") is not None)),
-                "learning_failed_counts": dict(Counter(str(r.get("learning_failed")) for r in self.failure_state_rows if r.get("learning_failed") is not None)),
+                "live_frames": len(live_failure_rows),
+                "active_backend_counts": dict(
+                    Counter(str(r.get("active_lidar_backend")) for r in live_failure_rows if r.get("active_lidar_backend") is not None)
+                ),
+                "learning_failed_counts": dict(
+                    Counter(str(r.get("learning_failed")) for r in live_failure_rows if r.get("learning_failed") is not None)
+                ),
                 "last": self.last_failure_state,
                 "last_live": self.last_live_failure_state,
             },
@@ -1033,6 +1055,7 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
             "## Perception Failure State",
             "",
             f"- Failure-state frames: `{perception_failure.get('frames')}`",
+            f"- Live failure-state frames: `{perception_failure.get('live_frames')}`",
             f"- Active backend counts: `{json.dumps(perception_failure.get('active_backend_counts', {}), ensure_ascii=False)}`",
             f"- Learning-failed counts: `{json.dumps(perception_failure.get('learning_failed_counts', {}), ensure_ascii=False)}`",
             f"- Last live active backend: `{live_failure.get('active_lidar_backend')}`",
@@ -1259,8 +1282,8 @@ def main() -> int:
             rclpy.spin_once(monitor, timeout_sec=0.1)
             if (
                 args.idle_timeout > 0.0
-                and monitor.last_msg_wall is not None
-                and time.time() - monitor.last_msg_wall > args.idle_timeout
+                and monitor.last_data_wall is not None
+                and time.time() - monitor.last_data_wall > args.idle_timeout
             ):
                 break
     finally:

@@ -80,12 +80,17 @@ mkdir -p "${LOG_DIR}"
 
 cleanup() {
   set +e
-  for pid in ${BAG_PID:-} ${MONITOR_PID:-} ${INJECTOR_PID:-} ${STACK_PID:-}; do
-    if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
-      kill -INT "${pid}" 2>/dev/null || true
+  for pgid in ${BAG_PGID:-} ${MONITOR_PGID:-} ${INJECTOR_PGID:-} ${STACK_PGID:-}; do
+    if [[ -n "${pgid}" ]] && kill -0 -- "-${pgid}" 2>/dev/null; then
+      kill -INT -- "-${pgid}" 2>/dev/null || true
     fi
   done
   sleep 2
+  for pgid in ${BAG_PGID:-} ${MONITOR_PGID:-} ${INJECTOR_PGID:-} ${STACK_PGID:-}; do
+    if [[ -n "${pgid}" ]] && kill -0 -- "-${pgid}" 2>/dev/null; then
+      kill -TERM -- "-${pgid}" 2>/dev/null || true
+    fi
+  done
   for pid in ${BAG_PID:-} ${MONITOR_PID:-} ${INJECTOR_PID:-} ${STACK_PID:-}; do
     if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
       kill -TERM "${pid}" 2>/dev/null || true
@@ -281,13 +286,14 @@ STACK_CMD=(
 if [[ -n "${FUSION_CALIBRATION_FILE}" ]]; then
   STACK_CMD+=("fusion_calibration_file:=${FUSION_CALIBRATION_FILE}")
 fi
-"${STACK_CMD[@]}" >"${LOG_DIR}/stack.log" 2>&1 &
+setsid "${STACK_CMD[@]}" >"${LOG_DIR}/stack.log" 2>&1 &
 STACK_PID=$!
+STACK_PGID=${STACK_PID}
 
 sleep "${STARTUP_WAIT}"
 
 if [[ "${USE_FAULT_INJECTOR}" == "true" ]]; then
-  python3 "${WORKSPACE_DIR}/scripts/eval/runtime_fault_injector.py" \
+  setsid python3 "${WORKSPACE_DIR}/scripts/eval/runtime_fault_injector.py" \
     --camera-mode "${FAULT_CAMERA_MODE}" \
     --lidar-mode "${FAULT_LIDAR_MODE}" \
     --gnss-mode "${FAULT_GNSS_MODE}" \
@@ -306,10 +312,11 @@ if [[ "${USE_FAULT_INJECTOR}" == "true" ]]; then
     --log-path "${LOG_DIR}/fault_injector_stats.json" \
     >"${LOG_DIR}/fault_injector.log" 2>&1 &
   INJECTOR_PID=$!
+  INJECTOR_PGID=${INJECTOR_PID}
   sleep 1
 fi
 
-python3 "${WORKSPACE_DIR}/scripts/eval/drd26_eval_monitor.py" \
+setsid python3 "${WORKSPACE_DIR}/scripts/eval/drd26_eval_monitor.py" \
   --log-dir "${LOG_DIR}" \
   --dataset "${DATASET_DIR}" \
   --scenario-file "${SCENARIO_FILE}" \
@@ -318,14 +325,16 @@ python3 "${WORKSPACE_DIR}/scripts/eval/drd26_eval_monitor.py" \
   --duplicate-threshold "${DUPLICATE_THRESHOLD}" \
   >"${LOG_DIR}/eval_monitor.log" 2>&1 &
 MONITOR_PID=$!
+MONITOR_PGID=${MONITOR_PID}
 
 sleep 1
 
-ros2 bag play "${DATASET_DIR}" \
+setsid ros2 bag play "${DATASET_DIR}" \
   --rate "${BAG_RATE}" \
   --topics /camera1/image_raw /lidar_points /gongji_gnss_ins_64 \
   >"${LOG_DIR}/bag.log" 2>&1 &
 BAG_PID=$!
+BAG_PGID=${BAG_PID}
 
 set +e
 wait "${MONITOR_PID}"

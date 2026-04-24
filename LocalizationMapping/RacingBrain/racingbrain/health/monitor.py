@@ -7,6 +7,7 @@ from collections import deque
 from typing import Any, Deque, Dict, List, Optional
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from std_msgs.msg import String
 
@@ -813,10 +814,12 @@ class RuntimeHealthMonitor(Node):
             raise_risk(0.66, 0.58, "fusion_projection_residual_high")
 
         gate_state = str(mapping.get("last_risk_gate_state") or "")
-        if gate_state == "freeze":
-            raise_risk(1.0, 0.96, "mapping_freeze_active")
-        elif gate_state == "degraded":
-            raise_risk(0.78, 0.70, "mapping_gate_active")
+        # The mapping gate is a policy output, not an upstream cause. Feeding it
+        # back into task-risk computation creates a positive loop where a
+        # transient freeze can keep the system pinned in freeze indefinitely.
+        # We still surface gate activity in mapping alerts/status, but the
+        # task-risk score should be driven by upstream evidence instead.
+        del gate_state
 
         observation_utilization = as_float(mapping.get("mean_observation_utilization"))
         if self.enough_samples(mapping, 8) and observation_utilization is not None and observation_utilization < 0.45:
@@ -897,9 +900,12 @@ def main(args: Optional[List[str]] = None) -> None:
     node = RuntimeHealthMonitor()
     try:
         rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

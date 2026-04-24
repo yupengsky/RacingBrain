@@ -7,6 +7,7 @@ from collections import deque
 from typing import Any, Deque, Dict, List, Optional
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from std_msgs.msg import String
 from test_cone_segmentation.msg import ThreeDConeArray
@@ -265,6 +266,14 @@ class LidarBackendArbiter(Node):
                 reasons.append("runtime_end_to_end_latency_freeze")
         return reasons
 
+    @staticmethod
+    def learning_failure_reasons(health_reasons: List[str], backend_reasons: List[str]) -> List[str]:
+        reasons: List[str] = list(backend_reasons)
+        for reason in health_reasons:
+            if reason in {"yolo_missing", "yolo_stale", "yolo_empty_ratio_high", "yolo_latency_high"}:
+                append_unique(reasons, reason)
+        return reasons
+
     def backend_failure_reasons(self, wall_time: float) -> List[str]:
         reasons: List[str] = []
         if not self.learning_backend_enabled:
@@ -393,6 +402,7 @@ class LidarBackendArbiter(Node):
         wall_time = time.monotonic()
         health_reasons = self.health_failure_reasons()
         backend_reasons = self.backend_failure_reasons(wall_time)
+        learning_reasons = self.learning_failure_reasons(health_reasons, backend_reasons)
         selected = self.choose_backend(wall_time, backend_reasons)
         fallback_available = self.fallback.available(wall_time, self.backend_stale_timeout_sec)
         if selected != self.active_backend:
@@ -417,7 +427,8 @@ class LidarBackendArbiter(Node):
             "preferred_backend": self.preferred_backend,
             "fallback_backend": self.fallback_backend,
             "learning_backend_enabled": self.learning_backend_enabled,
-            "learning_failed": bool(health_reasons or backend_reasons),
+            "learning_failed": bool(learning_reasons),
+            "learning_failure_reasons": learning_reasons,
             "backend_failure": bool(backend_reasons),
             "failure_reasons": sorted(set(health_reasons + backend_reasons)),
             "backend_reasons": backend_reasons,
@@ -460,9 +471,12 @@ def main(args: Optional[List[str]] = None) -> None:
     node = LidarBackendArbiter()
     try:
         rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":
