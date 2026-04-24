@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstring>
 #include <iomanip>
+#include <iostream>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -122,7 +123,7 @@ public:
 
         } catch (const std::exception& e) {
             RCLCPP_ERROR(this->get_logger(), "初始化失败: %s", e.what());
-            return;
+            throw;
         }
 
         // ---------- 7. ROS 通信接口 ----------
@@ -605,7 +606,17 @@ private:
 
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<LidarDetectorNode>());
-    rclcpp::shutdown();
+    try {
+        rclcpp::spin(std::make_shared<LidarDetectorNode>());
+    } catch (const std::exception& e) {
+        std::cerr << "[trt_infer_node] fatal error: " << e.what() << std::endl;
+        if (rclcpp::ok()) {
+            rclcpp::shutdown();
+        }
+        return 2;
+    }
+    if (rclcpp::ok()) {
+        rclcpp::shutdown();
+    }
     return 0;
 }

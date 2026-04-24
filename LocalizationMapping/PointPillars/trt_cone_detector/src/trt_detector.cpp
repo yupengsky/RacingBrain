@@ -22,6 +22,21 @@ void checkCuda(cudaError_t status, const char* what) {
     }
 }
 
+void checkCudaRuntimeAvailable() {
+    int device_count = 0;
+    cudaError_t status = cudaGetDeviceCount(&device_count);
+    if (status != cudaSuccess) {
+        std::ostringstream oss;
+        oss << "CUDA runtime unavailable: cudaGetDeviceCount failed: "
+            << cudaGetErrorString(status);
+        throw std::runtime_error(oss.str());
+    }
+    if (device_count <= 0) {
+        throw std::runtime_error("CUDA runtime unavailable: no CUDA devices found");
+    }
+    checkCuda(cudaSetDevice(0), "cudaSetDevice 0");
+}
+
 TensorDataType fromTrtDataType(nvinfer1::DataType dtype) {
     switch (dtype) {
         case nvinfer1::DataType::kFLOAT:
@@ -80,6 +95,8 @@ std::size_t inputBytes(int max_voxels, int dims1, int dims2, TensorDataType dtyp
 // 从磁盘读取序列化 TensorRT engine，创建 runtime/engine/context，
 // 并缓存所有输入输出张量的名称、shape、dtype 和字节数。
 TrtConeDetector::TrtConeDetector(const std::string& engine_path) {
+    checkCudaRuntimeAvailable();
+
     std::ifstream file(engine_path, std::ios::binary);
     if (!file.good()) {
         throw std::runtime_error("Cannot open engine file: " + engine_path);
@@ -92,6 +109,9 @@ TrtConeDetector::TrtConeDetector(const std::string& engine_path) {
     file.close();
 
     m_runtime = nvinfer1::createInferRuntime(m_logger);
+    if (m_runtime == nullptr) {
+        throw std::runtime_error("Failed to create TensorRT runtime");
+    }
     m_engine = m_runtime->deserializeCudaEngine(engine_data.data(), size);
     if (m_engine == nullptr) {
         throw std::runtime_error("Failed to deserialize TensorRT engine: " + engine_path);

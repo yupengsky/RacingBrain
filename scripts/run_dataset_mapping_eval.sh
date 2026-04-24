@@ -14,7 +14,7 @@ TRACK="${TRACK:-acceleration}"
 RVIZ="${RVIZ:-false}"
 ENABLE_PLANNING="${ENABLE_PLANNING:-false}"
 DUPLICATE_THRESHOLD="${DUPLICATE_THRESHOLD:-0.75}"
-LIDAR_BACKEND="${LIDAR_BACKEND:-pointpillars}"
+LIDAR_BACKEND="${LIDAR_BACKEND:-auto}"
 MAPPING_GATE="${MAPPING_GATE:-true}"
 FAULT_PROFILE="${FAULT_PROFILE:-none}"
 FAULT_START_SEC="${FAULT_START_SEC:-0.0}"
@@ -178,6 +178,7 @@ if [[ "${FAULT_PROFILE}" == "fusion_calibration_bias" ]]; then
 fi
 
 export \
+  LIDAR_BACKEND \
   MAPPING_GATE \
   FAULT_PROFILE \
   FAULT_START_SEC \
@@ -215,6 +216,7 @@ import sys
 
 scenario = {
     "profile": os.environ["FAULT_PROFILE"],
+    "lidar_backend": os.environ["LIDAR_BACKEND"],
     "mapping_gate": os.environ.get("MAPPING_GATE", "true").lower() == "true",
     "fault_start_sec": float(os.environ["FAULT_START_SEC"]),
     "fault_duration_sec": float(os.environ["FAULT_DURATION_SEC"]),

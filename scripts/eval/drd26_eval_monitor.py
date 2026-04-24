@@ -984,6 +984,7 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
                 "## Scenario",
                 "",
                 f"- Profile: `{scenario.get('profile')}`",
+                f"- LiDAR backend: `{scenario.get('lidar_backend')}`",
                 f"- Fault start: `{fmt(scenario.get('fault_start_sec'))} s`",
                 f"- Fault duration: `{fmt(scenario.get('fault_duration_sec'))} s`",
                 f"- Fault injector enabled: `{scenario.get('use_fault_injector')}`",

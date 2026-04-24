@@ -1,3 +1,4 @@
+import ctypes
 import os
 from configparser import ConfigParser
 from pathlib import Path
@@ -89,6 +90,34 @@ def has_ros_executable(package, executable):
     return (prefix / 'lib' / package / executable).exists()
 
 
+def cuda_runtime_available():
+    try:
+        cudart = ctypes.CDLL('libcudart.so')
+        device_count = ctypes.c_int(0)
+        status = cudart.cudaGetDeviceCount(ctypes.byref(device_count))
+        if status != 0:
+            message = 'unknown error'
+            try:
+                cudart.cudaGetErrorString.restype = ctypes.c_char_p
+                raw = cudart.cudaGetErrorString(status)
+                if raw:
+                    message = raw.decode('utf-8', errors='replace')
+            except Exception:
+                pass
+            print(
+                'Warning: PointPillars CUDA runtime unavailable: '
+                f'cudaGetDeviceCount={status} ({message}).'
+            )
+            return False
+        if device_count.value <= 0:
+            print('Warning: PointPillars CUDA runtime unavailable: no CUDA devices found.')
+            return False
+        return True
+    except Exception as exc:
+        print(f'Warning: PointPillars CUDA runtime check failed: {exc}')
+        return False
+
+
 def pointpillars_node(lidar_topic, output_topic, metrics_topic, eval_debug, health_metrics, marker_topic='/detected_cones_markers'):
     return Node(
         package='trt_cone_detector',
@@ -136,7 +165,12 @@ def build_lidar_launch(context, eval_debug, health_metrics, lidar_topic, lidar_b
     eval_debug_value = _as_bool(context, eval_debug)
     health_metrics_value = _as_bool(context, health_metrics)
     lidar_topic_value = _perform(context, lidar_topic)
-    pointpillars_available = has_ros_executable('trt_cone_detector', 'trt_infer_node')
+    pointpillars_executable_available = False
+    pointpillars_runtime_available = False
+    if backend in {'pointpillars', 'auto'}:
+        pointpillars_executable_available = has_ros_executable('trt_cone_detector', 'trt_infer_node')
+        pointpillars_runtime_available = pointpillars_executable_available and cuda_runtime_available()
+    pointpillars_available = pointpillars_executable_available and pointpillars_runtime_available
 
     generic_output = '/cone_detection_custom'
     generic_metrics = '/perception/lidar/evaluation/metrics'
@@ -158,8 +192,10 @@ def build_lidar_launch(context, eval_debug, health_metrics, lidar_topic, lidar_b
     if backend not in {'pointpillars', 'auto'}:
         print(f"Warning: unsupported lidar_backend={backend}; falling back to cluster.")
 
-    if backend == 'pointpillars' and not pointpillars_available:
+    if backend == 'pointpillars' and not pointpillars_executable_available:
         print("Warning: PointPillars executable is unavailable; launching cluster through the arbiter fallback path.")
+    elif backend == 'pointpillars' and not pointpillars_runtime_available:
+        print("Warning: PointPillars CUDA runtime is unavailable; launching cluster through the arbiter fallback path.")
 
     actions = [
         cluster_node(lidar_topic_value, cluster_output, cluster_metrics, eval_debug_value, health_metrics_value),
