@@ -16,6 +16,10 @@ def now_sec(node: Node) -> float:
     return float(node.get_clock().now().nanoseconds) * 1e-9
 
 
+def clamp01(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
+
 def as_float(value: Any) -> Optional[float]:
     if value is None:
         return None
@@ -32,6 +36,11 @@ def mean(values: List[float]) -> Optional[float]:
     if not values:
         return None
     return sum(values) / float(len(values))
+
+
+def append_unique(values: List[str], item: str) -> None:
+    if item and item not in values:
+        values.append(item)
 
 
 class BackendWindow:
@@ -269,11 +278,93 @@ class LidarBackendArbiter(Node):
             return self.preferred_backend
         return self.fallback_backend
 
+    def build_task_risk_hint(
+        self,
+        selected_backend: str,
+        health_reasons: List[str],
+        backend_reasons: List[str],
+        fallback_available: bool,
+    ) -> Dict[str, Any]:
+        map_contamination_risk = 0.0
+        planning_readiness_risk = 0.0
+        sources: List[str] = []
+
+        def raise_risk(map_value: float, planning_value: float, source: str) -> None:
+            nonlocal map_contamination_risk, planning_readiness_risk
+            map_contamination_risk = max(map_contamination_risk, clamp01(map_value))
+            planning_readiness_risk = max(planning_readiness_risk, clamp01(planning_value))
+            append_unique(sources, source)
+
+        reason_set = sorted(set(health_reasons + backend_reasons))
+        for reason in reason_set:
+            if reason in {"fusion_time_offset_high", "fusion_consistency_low", "fusion_stamp_delta_extreme"}:
+                raise_risk(1.0, 1.0, reason)
+            elif reason in {"yolo_empty_ratio_high", "pointpillars_empty_ratio_high"}:
+                raise_risk(0.96, 0.92, reason)
+            elif reason in {"pointpillars_stale", "yolo_missing", "lidar_missing", "fusion_missing"}:
+                raise_risk(0.88, 0.84, reason)
+            elif reason in {"fusion_calibration_drift_suspect", "fusion_drift_score_high"}:
+                raise_risk(0.72, 0.62, reason)
+            elif reason in {"yolo_stale"}:
+                raise_risk(0.68, 0.58, reason)
+            elif reason in {"yolo_latency_high", "lidar_latency_high", "pointpillars_latency_high"}:
+                raise_risk(0.50, 0.46, reason)
+            elif reason == "learning_backend_unavailable":
+                if fallback_available:
+                    raise_risk(0.55, 0.45, reason)
+                else:
+                    raise_risk(0.95, 0.95, reason)
+            else:
+                raise_risk(0.35, 0.30, reason)
+
+        if (
+            self.mode == "auto"
+            and self.learning_backend_enabled
+            and selected_backend == self.fallback_backend
+            and fallback_available
+        ):
+            raise_risk(0.35, 0.25, "cluster_fallback_active")
+
+        task_risk_hint_score = clamp01(max(map_contamination_risk, planning_readiness_risk))
+        if map_contamination_risk >= 0.90:
+            state = "freeze"
+            world_model_write_policy = "freeze_new_landmarks"
+            observation_hit_scale = 0.35
+            new_landmarks_allowed = False
+        elif task_risk_hint_score >= 0.65:
+            state = "degraded"
+            world_model_write_policy = "downweight_observations"
+            observation_hit_scale = 0.60
+            new_landmarks_allowed = True
+        elif task_risk_hint_score >= 0.35:
+            state = "monitor"
+            world_model_write_policy = "monitor_only"
+            observation_hit_scale = 0.90
+            new_landmarks_allowed = True
+        else:
+            state = "nominal"
+            world_model_write_policy = "open"
+            observation_hit_scale = 1.0
+            new_landmarks_allowed = True
+
+        return {
+            "state": state,
+            "task_risk_hint_score": task_risk_hint_score,
+            "map_contamination_risk_hint": map_contamination_risk,
+            "planning_readiness_risk_hint": planning_readiness_risk,
+            "task_risk_hint_sources": sources,
+            "task_risk_hint_sources_text": ";".join(sources) if sources else "none",
+            "world_model_write_policy_hint": world_model_write_policy,
+            "world_model_observation_hit_scale_hint": observation_hit_scale,
+            "world_model_new_landmarks_allowed_hint": new_landmarks_allowed,
+        }
+
     def on_timer(self) -> None:
         wall_time = time.monotonic()
         health_reasons = self.health_failure_reasons()
         backend_reasons = self.backend_failure_reasons(wall_time)
         selected = self.choose_backend(wall_time, backend_reasons)
+        fallback_available = self.fallback.available(wall_time, self.backend_stale_timeout_sec)
         if selected != self.active_backend:
             self.get_logger().warn(
                 f"Switching LiDAR backend: {self.active_backend} -> {selected}; "
@@ -281,6 +372,12 @@ class LidarBackendArbiter(Node):
             )
             self.active_backend = selected
             self.last_switch_wall = wall_time
+        task_risk_hint = self.build_task_risk_hint(
+            selected_backend=self.active_backend,
+            health_reasons=health_reasons,
+            backend_reasons=backend_reasons,
+            fallback_available=fallback_available,
+        )
 
         payload = {
             "component": "perception_failure_arbiter",
@@ -296,7 +393,7 @@ class LidarBackendArbiter(Node):
             "backend_reasons": backend_reasons,
             "health_reasons": health_reasons,
             "primary_available": self.primary.available(wall_time, self.backend_stale_timeout_sec),
-            "fallback_available": self.fallback.available(wall_time, self.backend_stale_timeout_sec),
+            "fallback_available": fallback_available,
             "primary_age_sec": self.primary.age_sec(wall_time),
             "fallback_age_sec": self.fallback.age_sec(wall_time),
             "scores": {
@@ -307,6 +404,16 @@ class LidarBackendArbiter(Node):
                 "primary_mean_total_ms": self.primary.mean_total_ms(),
                 "fallback_mean_total_ms": self.fallback.mean_total_ms(),
             },
+            "task_risk_hint_state": task_risk_hint["state"],
+            "task_risk_hint_score": task_risk_hint["task_risk_hint_score"],
+            "map_contamination_risk_hint": task_risk_hint["map_contamination_risk_hint"],
+            "planning_readiness_risk_hint": task_risk_hint["planning_readiness_risk_hint"],
+            "task_risk_hint_sources": task_risk_hint["task_risk_hint_sources"],
+            "task_risk_hint_sources_text": task_risk_hint["task_risk_hint_sources_text"],
+            "world_model_write_policy_hint": task_risk_hint["world_model_write_policy_hint"],
+            "world_model_observation_hit_scale_hint": task_risk_hint["world_model_observation_hit_scale_hint"],
+            "world_model_new_landmarks_allowed_hint": task_risk_hint["world_model_new_landmarks_allowed_hint"],
+            "task_risk_hint": task_risk_hint,
         }
         self.last_state = payload
         msg = String()

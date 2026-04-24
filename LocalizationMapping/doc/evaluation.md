@@ -108,7 +108,12 @@ Important artifacts:
   UNKNOWN-observation, duplicate-density, and gate-action metrics for judging
   whether degraded perception is polluting the global cone map.
 - `system_health.csv`: unified online health snapshots from `/racingbrain/health/system`.
-- `perception_failure_state.csv`: online perception failure decisions and active LiDAR backend.
+  It now also records task-level risk fields such as `task_risk_state`,
+  `task_risk_score`, `map_contamination_risk`, `planning_readiness_risk`, and
+  `world_model_write_policy`.
+- `perception_failure_state.csv`: online perception failure decisions and active
+  LiDAR backend, including arbiter-side task-risk hints that explain why the
+  system fell back or stayed in monitor/degraded mode.
 - `planning_state.csv`: optional sparse-track-graph readiness snapshots when
   `ENABLE_PLANNING=true` is used during replay.
 - `scenario.json`: replay fault configuration for the current run.
@@ -120,8 +125,15 @@ Important artifacts:
 Current metrics are self-consistency and runtime metrics. They quantify chain health,
 timing, fusion quality, map stability, duplicate risk, trajectory closure indicators,
 camera-LiDAR alignment quality, and the aggregated status of the online health bus.
+The health bus now carries a task-facing view of risk, so replay outputs can
+separate "module warnings" from "risk to world-model integrity" and "risk to
+planning readiness".
 They are not absolute accuracy metrics unless annotated cone positions or a reference
 trajectory are added later.
+
+`summary.json.task_risk` aggregates the online task-risk stream across the
+entire replay and reports state counts, score distributions, and the final
+world-model write policy seen by the mapper.
 
 Risk-aware mapping can be toggled during replay with:
 

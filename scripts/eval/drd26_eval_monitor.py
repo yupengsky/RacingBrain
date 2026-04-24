@@ -558,6 +558,14 @@ class EvalMonitor(Node):
             "stamp": stamp,
             "overall_status": data.get("overall_status"),
             "selected_lidar_backend": data.get("selected_lidar_backend"),
+            "task_risk_state": data.get("task_risk_state"),
+            "task_risk_score": data.get("task_risk_score"),
+            "map_contamination_risk": data.get("map_contamination_risk"),
+            "planning_readiness_risk": data.get("planning_readiness_risk"),
+            "risk_sources_text": data.get("risk_sources_text"),
+            "world_model_write_policy": data.get("world_model_write_policy"),
+            "world_model_observation_hit_scale": data.get("world_model_observation_hit_scale"),
+            "world_model_new_landmarks_allowed": data.get("world_model_new_landmarks_allowed"),
             "alert_count": len(data.get("alerts", [])) if isinstance(data.get("alerts"), list) else 0,
             "alerts": json.dumps(data.get("alerts", []), ensure_ascii=False),
         }
@@ -620,6 +628,14 @@ class EvalMonitor(Node):
             "fallback_available": data.get("fallback_available"),
             "primary_age_sec": data.get("primary_age_sec"),
             "fallback_age_sec": data.get("fallback_age_sec"),
+            "task_risk_hint_state": data.get("task_risk_hint_state"),
+            "task_risk_hint_score": data.get("task_risk_hint_score"),
+            "map_contamination_risk_hint": data.get("map_contamination_risk_hint"),
+            "planning_readiness_risk_hint": data.get("planning_readiness_risk_hint"),
+            "task_risk_hint_sources_text": data.get("task_risk_hint_sources_text"),
+            "world_model_write_policy_hint": data.get("world_model_write_policy_hint"),
+            "world_model_observation_hit_scale_hint": data.get("world_model_observation_hit_scale_hint"),
+            "world_model_new_landmarks_allowed_hint": data.get("world_model_new_landmarks_allowed_hint"),
         }
         scores = data.get("scores", {}) if isinstance(data.get("scores"), dict) else {}
         row["primary_empty_ratio"] = scores.get("primary_empty_ratio")
@@ -802,6 +818,18 @@ class EvalMonitor(Node):
                 "last": self.last_system_health,
                 "last_non_stale": self.last_non_stale_system_health,
             },
+            "task_risk": {
+                "frames": len(self.health_rows),
+                "state_counts": dict(Counter(str(r.get("task_risk_state")) for r in self.health_rows if r.get("task_risk_state") is not None)),
+                "task_risk_score": summarize(r.get("task_risk_score") for r in self.health_rows),
+                "map_contamination_risk": summarize(r.get("map_contamination_risk") for r in self.health_rows),
+                "planning_readiness_risk": summarize(r.get("planning_readiness_risk") for r in self.health_rows),
+                "world_model_write_policy_counts": dict(
+                    Counter(str(r.get("world_model_write_policy")) for r in self.health_rows if r.get("world_model_write_policy") is not None)
+                ),
+                "last_sources_text": None if not self.health_rows else self.health_rows[-1].get("risk_sources_text"),
+                "last_write_policy": None if not self.health_rows else self.health_rows[-1].get("world_model_write_policy"),
+            },
             "perception_failure": {
                 "frames": len(self.failure_state_rows),
                 "active_backend_counts": dict(Counter(str(r.get("active_lidar_backend")) for r in self.failure_state_rows if r.get("active_lidar_backend") is not None)),
@@ -876,6 +904,7 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
     trajectory = summary.get("trajectory", {})
     mapping_debug = summary.get("mapping_debug", {})
     system_health = summary.get("system_health", {})
+    task_risk = summary.get("task_risk", {})
     perception_failure = summary.get("perception_failure", {})
     planning = summary.get("planning", {})
     live_failure = perception_failure.get("last_live") or perception_failure.get("last") or {}
@@ -952,6 +981,16 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
             f"- Last overall status: `{(system_health.get('last') or {}).get('overall_status')}`",
             f"- Last non-stale status: `{(system_health.get('last_non_stale') or {}).get('overall_status')}`",
             "",
+            "## Task Risk",
+            "",
+            f"- Task-risk frames: `{task_risk.get('frames')}`",
+            f"- Task-risk state counts: `{json.dumps(task_risk.get('state_counts', {}), ensure_ascii=False)}`",
+            f"- Task-risk score mean: `{fmt(task_risk.get('task_risk_score', {}).get('mean'))}`",
+            f"- Map contamination risk mean: `{fmt(task_risk.get('map_contamination_risk', {}).get('mean'))}`",
+            f"- Planning readiness risk mean: `{fmt(task_risk.get('planning_readiness_risk', {}).get('mean'))}`",
+            f"- Last write policy: `{task_risk.get('last_write_policy')}`",
+            f"- Last risk sources: `{task_risk.get('last_sources_text')}`",
+            "",
             "## Perception Failure State",
             "",
             f"- Failure-state frames: `{perception_failure.get('frames')}`",
@@ -959,6 +998,7 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
             f"- Learning-failed counts: `{json.dumps(perception_failure.get('learning_failed_counts', {}), ensure_ascii=False)}`",
             f"- Last live active backend: `{live_failure.get('active_lidar_backend')}`",
             f"- Last live failure reasons: `{json.dumps(live_failure.get('failure_reasons', []), ensure_ascii=False)}`",
+            f"- Last live task-risk hint: `{live_failure.get('task_risk_hint_state')}` / `{fmt(live_failure.get('task_risk_hint_score'))}`",
             "",
             "## Planning Interface",
             "",

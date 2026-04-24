@@ -21,6 +21,10 @@ STATUS_RANK = {
 }
 
 
+def clamp01(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
+
 def now_sec(node: Node) -> float:
     return float(node.get_clock().now().nanoseconds) * 1e-9
 
@@ -68,6 +72,11 @@ def percentile(values: List[float], fraction: float) -> Optional[float]:
         return ordered[int(index)]
     weight = index - lo
     return ordered[lo] * (1.0 - weight) + ordered[hi] * weight
+
+
+def append_unique(values: List[str], item: str) -> None:
+    if item and item not in values:
+        values.append(item)
 
 
 class MetricHistory:
@@ -130,6 +139,7 @@ class RuntimeHealthMonitor(Node):
         self.declare_parameter("stale_timeout_sec", 3.0)
         self.declare_parameter("startup_grace_sec", 10.0)
         self.declare_parameter("history_size", 30)
+        self.declare_parameter("failure_state_topic", "/racingbrain/perception/failure_state")
 
         self.expected_perception = bool(self.get_parameter("expected_perception").value)
         self.expected_mapping = bool(self.get_parameter("expected_mapping").value)
@@ -138,6 +148,7 @@ class RuntimeHealthMonitor(Node):
         self.stale_timeout_sec = max(self.publish_period_sec * 1.5, float(self.get_parameter("stale_timeout_sec").value))
         self.startup_grace_sec = max(self.publish_period_sec, float(self.get_parameter("startup_grace_sec").value))
         self.history_size = max(5, int(self.get_parameter("history_size").value))
+        self.failure_state_topic = str(self.get_parameter("failure_state_topic").value)
 
         self.start_wall = time.monotonic()
         self.histories = {
@@ -146,12 +157,15 @@ class RuntimeHealthMonitor(Node):
             "fusion": MetricHistory(self.history_size),
             "mapping": MetricHistory(self.history_size),
         }
+        self.last_failure_state: Dict[str, Any] = {}
+        self.last_failure_state_wall: Optional[float] = None
 
         self.health_pub = self.create_publisher(String, "/racingbrain/health/system", 10)
         self.create_subscription(String, "/perception/yolo/evaluation/metrics", self.cb_yolo, 10)
         self.create_subscription(String, "/perception/lidar/evaluation/metrics", self.cb_lidar, 10)
         self.create_subscription(String, "/perception/fusion/evaluation/metrics", self.cb_fusion, 10)
         self.create_subscription(String, "/slam/evaluation/metrics", self.cb_mapping, 10)
+        self.create_subscription(String, self.failure_state_topic, self.cb_failure_state, 10)
         self.create_timer(self.publish_period_sec, self.publish_health)
 
         self.get_logger().info(
@@ -183,6 +197,14 @@ class RuntimeHealthMonitor(Node):
     def cb_mapping(self, msg: String) -> None:
         self._record("mapping", msg)
 
+    def cb_failure_state(self, msg: String) -> None:
+        try:
+            payload = json.loads(msg.data)
+        except json.JSONDecodeError:
+            payload = {"raw": msg.data}
+        self.last_failure_state = payload
+        self.last_failure_state_wall = time.monotonic()
+
     def publish_health(self) -> None:
         wall_time = time.monotonic()
         uptime_sec = wall_time - self.start_wall
@@ -192,6 +214,7 @@ class RuntimeHealthMonitor(Node):
             "fusion": self.build_fusion_status(wall_time, uptime_sec),
             "mapping": self.build_mapping_status(wall_time, uptime_sec),
         }
+        task_risk = self.build_task_risk(components, wall_time, uptime_sec)
 
         overall_status = "ok"
         alerts: List[str] = []
@@ -206,21 +229,37 @@ class RuntimeHealthMonitor(Node):
             component = components[name]
             best_rank = max(best_rank, STATUS_RANK.get(str(component["status"]), STATUS_RANK["warn"]))
             alerts.extend(component.get("alerts", []))
+        alerts.extend(task_risk.get("alerts", []))
+        if task_risk["state"] in {"degraded", "freeze"}:
+            best_rank = max(best_rank, STATUS_RANK["warn"])
 
         for status, rank in STATUS_RANK.items():
             if rank == best_rank:
                 overall_status = status
+
+        alerts = sorted(set(alerts))
+        selected_lidar_backend = str(task_risk.get("selected_lidar_backend") or self.selected_lidar_backend)
 
         payload = {
             "component": "system_health",
             "stamp": now_sec(self),
             "uptime_sec": uptime_sec,
             "overall_status": overall_status,
-            "selected_lidar_backend": self.selected_lidar_backend,
+            "selected_lidar_backend": selected_lidar_backend,
             "expected_perception": self.expected_perception,
             "expected_mapping": self.expected_mapping,
             "alerts": alerts,
             "components": components,
+            "task_risk_state": task_risk["state"],
+            "task_risk_score": task_risk["task_risk_score"],
+            "map_contamination_risk": task_risk["map_contamination_risk"],
+            "planning_readiness_risk": task_risk["planning_readiness_risk"],
+            "risk_sources": task_risk["risk_sources"],
+            "risk_sources_text": task_risk["risk_sources_text"],
+            "world_model_write_policy": task_risk["world_model_write_policy"],
+            "world_model_observation_hit_scale": task_risk["observation_hit_scale"],
+            "world_model_new_landmarks_allowed": task_risk["new_landmarks_allowed"],
+            "task_risk": task_risk,
         }
         msg = String()
         msg.data = json.dumps(payload, sort_keys=True)
@@ -380,6 +419,7 @@ class RuntimeHealthMonitor(Node):
                 "last_consistency_score": None if latest is None else as_float(latest.get("consistency_score")),
                 "mean_calibration_drift_score": mean_calibration_drift_score,
                 "last_calibration_drift_score": None if latest is None else as_float(latest.get("calibration_drift_score")),
+                "mean_magnet_radius_px": mean_magnet_radius_px,
                 "alignment_state": alignment_state,
             }
         )
@@ -451,6 +491,185 @@ class RuntimeHealthMonitor(Node):
                 info["status"] = "warn"
                 info["alerts"].append("mapping_sync_latency_high")
         return info
+
+    def build_task_risk(
+        self,
+        components: Dict[str, Dict[str, Any]],
+        wall_time: float,
+        uptime_sec: float,
+    ) -> Dict[str, Any]:
+        map_contamination_risk = 0.0
+        planning_readiness_risk = 0.0
+        risk_sources: List[str] = []
+
+        def raise_risk(map_value: Optional[float], planning_value: Optional[float], source: str) -> None:
+            nonlocal map_contamination_risk, planning_readiness_risk
+            if map_value is not None:
+                map_contamination_risk = max(map_contamination_risk, clamp01(map_value))
+            if planning_value is not None:
+                planning_readiness_risk = max(planning_readiness_risk, clamp01(planning_value))
+            append_unique(risk_sources, source)
+
+        failure_state = {}
+        failure_state_fresh = False
+        if self.last_failure_state_wall is not None:
+            failure_state_age = wall_time - self.last_failure_state_wall
+            failure_state_fresh = failure_state_age <= self.stale_timeout_sec
+            if failure_state_fresh:
+                failure_state = self.last_failure_state
+
+        selected_lidar_backend = str(failure_state.get("active_lidar_backend") or self.selected_lidar_backend)
+
+        hint_map = as_float(failure_state.get("map_contamination_risk_hint"))
+        hint_planning = as_float(failure_state.get("planning_readiness_risk_hint"))
+        hint_score = as_float(failure_state.get("task_risk_hint_score"))
+        if hint_map is not None:
+            map_contamination_risk = max(map_contamination_risk, clamp01(hint_map))
+        if hint_planning is not None:
+            planning_readiness_risk = max(planning_readiness_risk, clamp01(hint_planning))
+        elif hint_score is not None:
+            planning_readiness_risk = max(planning_readiness_risk, clamp01(hint_score))
+        if hint_score is not None:
+            map_contamination_risk = max(map_contamination_risk, clamp01(hint_score))
+
+        hint_sources_text = str(failure_state.get("task_risk_hint_sources_text") or "")
+        for item in hint_sources_text.split(";"):
+            append_unique(risk_sources, item.strip())
+
+        if bool(failure_state.get("learning_failed")):
+            raise_risk(0.55, 0.50, "learning_failure_active")
+        if bool(failure_state.get("backend_failure")):
+            raise_risk(0.78, 0.72, "lidar_backend_failure")
+        if (
+            failure_state_fresh
+            and self.learning_fallback_active(failure_state)
+            and str(failure_state.get("mode") or "auto") == "auto"
+        ):
+            raise_risk(0.35, 0.25, "cluster_fallback_active")
+
+        yolo = components.get("yolo", {})
+        lidar = components.get("lidar", {})
+        fusion = components.get("fusion", {})
+        mapping = components.get("mapping", {})
+
+        if str(yolo.get("status")) in {"missing", "stale"}:
+            raise_risk(0.82, 0.76, f"yolo_{yolo.get('status')}")
+        if str(lidar.get("status")) in {"missing", "stale"}:
+            raise_risk(0.84, 0.80, f"lidar_{lidar.get('status')}")
+        if str(fusion.get("status")) in {"missing", "stale"}:
+            raise_risk(0.96, 0.94, f"fusion_{fusion.get('status')}")
+        if str(mapping.get("status")) in {"missing", "stale"}:
+            raise_risk(0.90, 0.92, f"mapping_{mapping.get('status')}")
+
+        if self.enough_samples(yolo, 8):
+            empty_ratio = as_float(yolo.get("empty_ratio"))
+            if empty_ratio is not None and empty_ratio > 0.90:
+                raise_risk(0.96, 0.92, "yolo_empty_ratio_high")
+        if (as_float(yolo.get("p95_total_ms")) or 0.0) > 220.0:
+            raise_risk(0.50, 0.46, "yolo_latency_high")
+
+        if self.enough_samples(lidar, 8):
+            empty_ratio = as_float(lidar.get("empty_ratio"))
+            if empty_ratio is not None and empty_ratio > 0.95:
+                raise_risk(0.88, 0.82, "lidar_empty_ratio_high")
+        if (as_float(lidar.get("p95_total_ms")) or 0.0) > 220.0:
+            raise_risk(0.52, 0.48, "lidar_latency_high")
+
+        alignment_state = str(fusion.get("alignment_state") or "")
+        if alignment_state == "time_offset":
+            raise_risk(1.0, 1.0, "fusion_time_offset_high")
+        elif alignment_state == "drift_suspect":
+            raise_risk(0.72, 0.62, "fusion_calibration_drift_suspect")
+        elif alignment_state == "degraded":
+            raise_risk(0.85, 0.76, "fusion_consistency_low")
+
+        unknown_ratio = as_float(fusion.get("mean_unknown_ratio"))
+        if unknown_ratio is not None and unknown_ratio > 0.75:
+            raise_risk(0.60, 0.52, "fusion_unknown_ratio_high")
+
+        projection_error_px = as_float(fusion.get("mean_projection_error_px"))
+        magnet_radius_px = as_float(fusion.get("mean_magnet_radius_px")) or 60.0
+        if projection_error_px is not None and projection_error_px > magnet_radius_px * 1.5:
+            raise_risk(0.66, 0.58, "fusion_projection_residual_high")
+
+        gate_state = str(mapping.get("last_risk_gate_state") or "")
+        if gate_state == "freeze":
+            raise_risk(1.0, 0.96, "mapping_freeze_active")
+        elif gate_state == "degraded":
+            raise_risk(0.78, 0.70, "mapping_gate_active")
+
+        observation_utilization = as_float(mapping.get("mean_observation_utilization"))
+        if self.enough_samples(mapping, 8) and observation_utilization is not None and observation_utilization < 0.45:
+            raise_risk(0.58, 0.54, "mapping_observation_utilization_low")
+
+        last_stable_cones = as_float(mapping.get("last_stable_cones"))
+        if uptime_sec > max(self.startup_grace_sec * 2.0, 15.0):
+            if last_stable_cones is None or last_stable_cones < 6.0:
+                raise_risk(0.40, 0.82, "stable_map_not_ready")
+            elif last_stable_cones < 12.0:
+                raise_risk(0.22, 0.45, "stable_map_thin")
+
+        task_risk_score = clamp01(max(map_contamination_risk, planning_readiness_risk))
+        if map_contamination_risk >= 0.90:
+            state = "freeze"
+            world_model_write_policy = "freeze_new_landmarks"
+            observation_hit_scale = 0.35
+            new_landmarks_allowed = False
+        elif task_risk_score >= 0.65:
+            state = "degraded"
+            world_model_write_policy = "downweight_observations"
+            observation_hit_scale = 0.60
+            new_landmarks_allowed = True
+        elif task_risk_score >= 0.35:
+            state = "monitor"
+            world_model_write_policy = "monitor_only"
+            observation_hit_scale = 0.90
+            new_landmarks_allowed = True
+        else:
+            state = "nominal"
+            world_model_write_policy = "open"
+            observation_hit_scale = 1.0
+            new_landmarks_allowed = True
+
+        alerts: List[str] = []
+        if state == "freeze":
+            alerts.extend(["task_risk_freeze", "map_contamination_risk_high"])
+        elif state == "degraded":
+            alerts.extend(["task_risk_degraded", "map_contamination_risk_elevated"])
+        elif state == "monitor":
+            alerts.append("task_risk_monitor")
+        if planning_readiness_risk >= 0.80:
+            alerts.append("planning_readiness_risk_high")
+
+        return {
+            "state": state,
+            "task_risk_score": task_risk_score,
+            "map_contamination_risk": map_contamination_risk,
+            "planning_readiness_risk": planning_readiness_risk,
+            "risk_sources": risk_sources,
+            "risk_sources_text": ";".join(risk_sources) if risk_sources else "none",
+            "world_model_write_policy": world_model_write_policy,
+            "observation_hit_scale": observation_hit_scale,
+            "new_landmarks_allowed": new_landmarks_allowed,
+            "selected_lidar_backend": selected_lidar_backend,
+            "alerts": sorted(set(alerts)),
+        }
+
+    @staticmethod
+    def enough_samples(component: Dict[str, Any], minimum: int) -> bool:
+        sample_count = component.get("sample_count")
+        try:
+            return int(sample_count) >= minimum
+        except (TypeError, ValueError):
+            return False
+
+    @staticmethod
+    def learning_fallback_active(failure_state: Dict[str, Any]) -> bool:
+        if not failure_state:
+            return False
+        if not bool(failure_state.get("fallback_available")):
+            return False
+        return str(failure_state.get("active_lidar_backend") or "") == "cluster"
 
 
 def main(args: Optional[List[str]] = None) -> None:

@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cmath>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <Eigen/Dense>
@@ -41,11 +42,6 @@ double elapsed_ms(SteadyClock::time_point start, SteadyClock::time_point end = S
     return std::chrono::duration<double, std::milli>(end - start).count();
 }
 
-bool containsToken(const std::string& text, const std::string& token)
-{
-    return text.find(token) != std::string::npos;
-}
-
 std::string extractJsonString(const std::string& text, const std::string& key)
 {
     const std::string pattern = "\"" + key + "\"";
@@ -72,6 +68,27 @@ bool extractJsonBool(const std::string& text, const std::string& key, bool defau
     if (text.compare(value_pos, 4, "true") == 0) return true;
     if (text.compare(value_pos, 5, "false") == 0) return false;
     return default_value;
+}
+
+double extractJsonDouble(
+    const std::string& text,
+    const std::string& key,
+    double default_value = std::numeric_limits<double>::quiet_NaN())
+{
+    const std::string pattern = "\"" + key + "\"";
+    const size_t key_pos = text.find(pattern);
+    if (key_pos == std::string::npos) return default_value;
+    const size_t colon_pos = text.find(':', key_pos + pattern.size());
+    if (colon_pos == std::string::npos) return default_value;
+    const size_t value_pos = text.find_first_not_of(" \t\r\n", colon_pos + 1);
+    if (value_pos == std::string::npos) return default_value;
+    const size_t value_end = text.find_first_of(",}", value_pos);
+    const std::string token = text.substr(value_pos, value_end - value_pos);
+    try {
+        return std::stod(token);
+    } catch (const std::exception&) {
+        return default_value;
+    }
 }
 
 std::string jsonEscape(const std::string& text)
@@ -222,6 +239,22 @@ private:
         std::string failure_raw;
         std::string health_raw;
         std::string health_status;
+        std::string task_risk_state = "nominal";
+        std::string risk_sources_text = "none";
+        std::string world_model_write_policy = "open";
+        double task_risk_score = 0.0;
+        double map_contamination_risk = 0.0;
+        double planning_readiness_risk = 0.0;
+        double world_model_observation_hit_scale = 1.0;
+        bool world_model_new_landmarks_allowed = true;
+        std::string failure_hint_state = "nominal";
+        std::string failure_hint_sources_text = "none";
+        std::string failure_hint_write_policy = "open";
+        double failure_hint_score = 0.0;
+        double failure_hint_map_contamination_risk = 0.0;
+        double failure_hint_planning_readiness_risk = 0.0;
+        double failure_hint_observation_hit_scale = 1.0;
+        bool failure_hint_new_landmarks_allowed = true;
         SteadyClock::time_point failure_wall = SteadyClock::now();
         SteadyClock::time_point health_wall = SteadyClock::now();
     } risk_state_;
@@ -229,7 +262,13 @@ private:
     struct RiskGateDecision {
         std::string state = "open";
         std::string reasons = "none";
+        std::string task_risk_state = "nominal";
+        std::string risk_sources = "none";
+        std::string world_model_write_policy = "open";
         double hit_scale = 1.0;
+        double task_risk_score = 0.0;
+        double map_contamination_risk = 0.0;
+        double planning_readiness_risk = 0.0;
         bool allow_new_cones = true;
         bool stale = false;
     } current_gate_;
@@ -422,6 +461,18 @@ private:
         risk_state_.active_backend = extractJsonString(msg->data, "active_lidar_backend");
         risk_state_.learning_failed = extractJsonBool(msg->data, "learning_failed", false);
         risk_state_.fallback_available = extractJsonBool(msg->data, "fallback_available", false);
+        risk_state_.failure_hint_state = extractJsonString(msg->data, "task_risk_hint_state");
+        risk_state_.failure_hint_sources_text = extractJsonString(msg->data, "task_risk_hint_sources_text");
+        risk_state_.failure_hint_write_policy = extractJsonString(msg->data, "world_model_write_policy_hint");
+        risk_state_.failure_hint_score = extractJsonDouble(msg->data, "task_risk_hint_score", 0.0);
+        risk_state_.failure_hint_map_contamination_risk =
+            extractJsonDouble(msg->data, "map_contamination_risk_hint", 0.0);
+        risk_state_.failure_hint_planning_readiness_risk =
+            extractJsonDouble(msg->data, "planning_readiness_risk_hint", 0.0);
+        risk_state_.failure_hint_observation_hit_scale =
+            extractJsonDouble(msg->data, "world_model_observation_hit_scale_hint", 1.0);
+        risk_state_.failure_hint_new_landmarks_allowed =
+            extractJsonBool(msg->data, "world_model_new_landmarks_allowed_hint", true);
         risk_state_.failure_wall = SteadyClock::now();
     }
 
@@ -430,6 +481,16 @@ private:
         risk_state_.has_health = true;
         risk_state_.health_raw = msg->data;
         risk_state_.health_status = extractJsonString(msg->data, "overall_status");
+        risk_state_.task_risk_state = extractJsonString(msg->data, "task_risk_state");
+        risk_state_.risk_sources_text = extractJsonString(msg->data, "risk_sources_text");
+        risk_state_.world_model_write_policy = extractJsonString(msg->data, "world_model_write_policy");
+        risk_state_.task_risk_score = extractJsonDouble(msg->data, "task_risk_score", 0.0);
+        risk_state_.map_contamination_risk = extractJsonDouble(msg->data, "map_contamination_risk", 0.0);
+        risk_state_.planning_readiness_risk = extractJsonDouble(msg->data, "planning_readiness_risk", 0.0);
+        risk_state_.world_model_observation_hit_scale =
+            extractJsonDouble(msg->data, "world_model_observation_hit_scale", 1.0);
+        risk_state_.world_model_new_landmarks_allowed =
+            extractJsonBool(msg->data, "world_model_new_landmarks_allowed", true);
         risk_state_.health_wall = SteadyClock::now();
     }
 
@@ -446,6 +507,9 @@ private:
         if (!gate_params_.enabled) {
             decision.state = "disabled";
             decision.reasons = "gate_disabled";
+            decision.task_risk_state = "disabled";
+            decision.risk_sources = "gate_disabled";
+            decision.world_model_write_policy = "disabled";
             return decision;
         }
 
@@ -455,102 +519,108 @@ private:
             state = risk_state_;
         }
 
-        if (!state.has_failure_state) {
+        const auto now = SteadyClock::now();
+        const double failure_age_sec = std::chrono::duration<double>(now - state.failure_wall).count();
+        const double health_age_sec = std::chrono::duration<double>(now - state.health_wall).count();
+        const bool has_fresh_failure = state.has_failure_state && failure_age_sec <= gate_params_.stale_timeout_sec;
+        const bool has_fresh_health = state.has_health && health_age_sec <= gate_params_.stale_timeout_sec;
+
+        if (!state.has_failure_state && !state.has_health) {
             decision.state = "open";
-            decision.reasons = "no_failure_state";
+            decision.reasons = "no_risk_state";
             return decision;
         }
 
-        const double age_sec = std::chrono::duration<double>(SteadyClock::now() - state.failure_wall).count();
-        if (age_sec > gate_params_.stale_timeout_sec) {
+        if (!has_fresh_failure && !has_fresh_health) {
             decision.state = "stale";
-            decision.reasons = "failure_state_stale";
+            decision.reasons = "task_risk_state_stale";
+            decision.task_risk_state = "stale";
+            decision.risk_sources = "task_risk_state_stale";
+            decision.world_model_write_policy = "hold_last";
             decision.stale = true;
             return decision;
         }
 
-        const std::string& raw = state.failure_raw;
-        const bool fallback_active = (state.active_backend == "cluster");
-        const bool learning_unavailable = containsToken(raw, "learning_backend_unavailable");
-        const bool fallback_only = learning_unavailable && fallback_active;
+        double map_risk = 0.0;
+        double planning_risk = 0.0;
+        double task_risk_score = 0.0;
+        double observation_hit_scale = 1.0;
+        bool allow_new_cones = true;
+        std::string task_risk_state = "nominal";
+        std::string risk_sources = "none";
+        std::string world_model_write_policy = "open";
 
-        bool severe = false;
-        bool degraded = false;
-        std::vector<std::string> reasons;
-
-        auto mark_severe = [&](const std::string& token) {
-            if (containsToken(raw, token)) {
-                severe = true;
-                reasons.push_back(token);
-            }
-        };
-        auto mark_degraded = [&](const std::string& token) {
-            if (containsToken(raw, token)) {
-                degraded = true;
-                reasons.push_back(token);
-            }
-        };
-
-        mark_severe("fusion_time_offset_high");
-        mark_severe("fusion_consistency_low");
-        mark_severe("yolo_empty_ratio_high");
-        mark_severe("pointpillars_empty_ratio_high");
-        if (!fallback_only) {
-            mark_severe("pointpillars_stale");
+        if (has_fresh_health) {
+            map_risk = std::clamp(state.map_contamination_risk, 0.0, 1.0);
+            planning_risk = std::clamp(state.planning_readiness_risk, 0.0, 1.0);
+            task_risk_score = std::clamp(state.task_risk_score, 0.0, 1.0);
+            observation_hit_scale = std::clamp(state.world_model_observation_hit_scale, 0.0, 1.0);
+            allow_new_cones = state.world_model_new_landmarks_allowed;
+            task_risk_state = state.task_risk_state.empty() ? "nominal" : state.task_risk_state;
+            risk_sources = state.risk_sources_text.empty() ? "none" : state.risk_sources_text;
+            world_model_write_policy = state.world_model_write_policy.empty() ? "open" : state.world_model_write_policy;
+        } else {
+            map_risk = std::clamp(state.failure_hint_map_contamination_risk, 0.0, 1.0);
+            planning_risk = std::clamp(state.failure_hint_planning_readiness_risk, 0.0, 1.0);
+            task_risk_score = std::clamp(state.failure_hint_score, 0.0, 1.0);
+            observation_hit_scale = std::clamp(state.failure_hint_observation_hit_scale, 0.0, 1.0);
+            allow_new_cones = state.failure_hint_new_landmarks_allowed;
+            task_risk_state = state.failure_hint_state.empty() ? "nominal" : state.failure_hint_state;
+            risk_sources = state.failure_hint_sources_text.empty() ? "none" : state.failure_hint_sources_text;
+            world_model_write_policy =
+                state.failure_hint_write_policy.empty() ? "open" : state.failure_hint_write_policy;
         }
 
-        mark_degraded("fusion_calibration_drift_suspect");
-        mark_degraded("fusion_drift_score_high");
-        mark_degraded("fusion_projection_residual_high");
-        mark_degraded("yolo_stale");
-        mark_degraded("yolo_latency_high");
-        mark_degraded("lidar_latency_high");
-        mark_degraded("pointpillars_latency_high");
+        decision.task_risk_score = task_risk_score;
+        decision.map_contamination_risk = map_risk;
+        decision.planning_readiness_risk = planning_risk;
+        decision.task_risk_state = task_risk_state;
+        decision.risk_sources = risk_sources;
+        decision.world_model_write_policy = world_model_write_policy;
+        decision.hit_scale = observation_hit_scale;
+        decision.allow_new_cones = allow_new_cones;
 
-        if (fallback_only) {
-            reasons.push_back("cluster_fallback_active");
-        } else if (learning_unavailable) {
-            severe = true;
-            reasons.push_back("learning_backend_unavailable");
-        }
-
-        if (reasons.empty()) {
+        if (task_risk_state == "nominal" && task_risk_score < 0.35 && map_risk < 0.35 && planning_risk < 0.35) {
             decision.state = "open";
-            decision.reasons = "none";
+            decision.reasons = risk_sources;
             return decision;
         }
 
         const bool freeze_ready = eval_frame_index_ >= gate_params_.min_frames_before_freeze
             || countStableCones() >= gate_params_.min_stable_cones_before_freeze;
-        bool freeze_new_cones = false;
-        if (severe && gate_params_.freeze_new_cones_on_severe && freeze_ready) {
-            freeze_new_cones = true;
-        } else if (degraded && gate_params_.freeze_new_cones_on_degraded && freeze_ready) {
-            freeze_new_cones = true;
-        }
 
-        if (freeze_new_cones) {
+        const bool freeze_requested = !allow_new_cones || task_risk_state == "freeze" || map_risk >= 0.90;
+        const bool degraded_requested =
+            task_risk_state == "degraded" || task_risk_score >= 0.65 || planning_risk >= 0.75;
+
+        if (freeze_requested && freeze_ready) {
             decision.state = "freeze";
-            decision.hit_scale = gate_params_.severe_hit_scale;
+            decision.hit_scale = std::min(decision.hit_scale, gate_params_.severe_hit_scale);
             decision.allow_new_cones = false;
-        } else if (severe) {
+            decision.world_model_write_policy = "freeze_new_landmarks";
+        } else if (freeze_requested) {
             decision.state = "degraded";
-            decision.hit_scale = gate_params_.severe_hit_scale;
-            if (!freeze_ready) reasons.push_back("gate_warmup");
-        } else if (degraded) {
+            decision.hit_scale = std::min(decision.hit_scale, gate_params_.severe_hit_scale);
+            decision.allow_new_cones = true;
+            decision.world_model_write_policy = "downweight_observations";
+            if (decision.risk_sources == "none") {
+                decision.risk_sources = "gate_warmup";
+            } else {
+                decision.risk_sources += ";gate_warmup";
+            }
+        } else if (degraded_requested) {
             decision.state = "degraded";
-            decision.hit_scale = gate_params_.degraded_hit_scale;
+            decision.hit_scale = std::min(decision.hit_scale, gate_params_.degraded_hit_scale);
+            decision.world_model_write_policy = "downweight_observations";
         } else {
             decision.state = "monitor";
-            decision.hit_scale = 1.0;
+            decision.hit_scale = std::min(decision.hit_scale, 1.0);
+            if (decision.world_model_write_policy == "open") {
+                decision.world_model_write_policy = "monitor_only";
+            }
         }
 
-        std::ostringstream reason_stream;
-        for (size_t i = 0; i < reasons.size(); ++i) {
-            if (i > 0) reason_stream << ";";
-            reason_stream << reasons[i];
-        }
-        decision.reasons = reason_stream.str();
+        decision.reasons = decision.risk_sources;
         return decision;
     }
 
@@ -1275,6 +1345,14 @@ private:
             << ",\"risk_gate_enabled\":" << (gate_params_.enabled ? "true" : "false")
             << ",\"risk_gate_state\":\"" << jsonEscape(current_gate_.state) << "\""
             << ",\"risk_gate_reasons\":\"" << jsonEscape(current_gate_.reasons) << "\""
+            << ",\"task_risk_state\":\"" << jsonEscape(current_gate_.task_risk_state) << "\""
+            << ",\"task_risk_sources\":\"" << jsonEscape(current_gate_.risk_sources) << "\""
+            << ",\"task_risk_score\":" << current_gate_.task_risk_score
+            << ",\"map_contamination_risk\":" << current_gate_.map_contamination_risk
+            << ",\"planning_readiness_risk\":" << current_gate_.planning_readiness_risk
+            << ",\"world_model_write_policy\":\"" << jsonEscape(current_gate_.world_model_write_policy) << "\""
+            << ",\"world_model_observation_hit_scale\":" << current_gate_.hit_scale
+            << ",\"world_model_new_landmarks_allowed\":" << (current_gate_.allow_new_cones ? "true" : "false")
             << ",\"risk_gate_hit_scale\":" << current_gate_.hit_scale
             << ",\"risk_gate_new_cones_allowed\":" << (current_gate_.allow_new_cones ? "true" : "false")
             << ",\"risk_gate_stale\":" << (current_gate_.stale ? "true" : "false")
