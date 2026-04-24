@@ -213,10 +213,15 @@ class LidarBackendArbiter(Node):
         reasons: List[str] = []
         components = self.last_system_health.get("components", {})
         if not isinstance(components, dict):
-            return reasons
+            components = {}
 
         yolo = components.get("yolo", {}) if isinstance(components.get("yolo"), dict) else {}
         fusion = components.get("fusion", {}) if isinstance(components.get("fusion"), dict) else {}
+        runtime_budget = (
+            self.last_system_health.get("runtime_budget", {})
+            if isinstance(self.last_system_health.get("runtime_budget"), dict)
+            else {}
+        )
 
         yolo_status = str(yolo.get("status") or "")
         if yolo_status in {"missing", "stale"}:
@@ -239,6 +244,25 @@ class LidarBackendArbiter(Node):
             reasons.append("fusion_drift_score_high")
         if stamp_delta_ms is not None and stamp_delta_ms > self.backend_stale_timeout_sec * 1000.0:
             reasons.append("fusion_stamp_delta_extreme")
+
+        runtime_budget_state = str(runtime_budget.get("state") or "")
+        runtime_budget_score = as_float(runtime_budget.get("score"))
+        total_p95_ms = as_float(runtime_budget.get("total_p95_ms"))
+        if runtime_budget_state == "freeze":
+            reasons.append("runtime_budget_freeze")
+        elif runtime_budget_state == "degraded":
+            reasons.append("runtime_budget_degraded")
+        elif runtime_budget_state == "strained":
+            reasons.append("runtime_budget_strained")
+        if runtime_budget_score is not None and runtime_budget_score > 0.85:
+            reasons.append("runtime_budget_score_high")
+        if total_p95_ms is not None and total_p95_ms > 0.0:
+            freeze_limit = None
+            limits = runtime_budget.get("limits_ms")
+            if isinstance(limits, dict):
+                freeze_limit = as_float(limits.get("end_to_end_freeze_ms"))
+            if freeze_limit is not None and total_p95_ms >= freeze_limit:
+                reasons.append("runtime_end_to_end_latency_freeze")
         return reasons
 
     def backend_failure_reasons(self, wall_time: float) -> List[str]:
@@ -303,6 +327,12 @@ class LidarBackendArbiter(Node):
                 raise_risk(0.96, 0.92, reason)
             elif reason in {"pointpillars_stale", "yolo_missing", "lidar_missing", "fusion_missing"}:
                 raise_risk(0.88, 0.84, reason)
+            elif reason in {"runtime_budget_freeze", "runtime_end_to_end_latency_freeze"}:
+                raise_risk(0.92, 0.90, reason)
+            elif reason in {"runtime_budget_degraded", "runtime_budget_score_high"}:
+                raise_risk(0.65, 0.72, reason)
+            elif reason in {"runtime_budget_strained"}:
+                raise_risk(0.28, 0.36, reason)
             elif reason in {"fusion_calibration_drift_suspect", "fusion_drift_score_high"}:
                 raise_risk(0.72, 0.62, reason)
             elif reason in {"yolo_stale"}:
@@ -404,6 +434,10 @@ class LidarBackendArbiter(Node):
                 "primary_mean_total_ms": self.primary.mean_total_ms(),
                 "fallback_mean_total_ms": self.fallback.mean_total_ms(),
             },
+            "runtime_budget_state": self.last_system_health.get("runtime_budget_state"),
+            "runtime_budget_score": self.last_system_health.get("runtime_budget_score"),
+            "runtime_budget_total_p95_ms": self.last_system_health.get("runtime_budget_total_p95_ms"),
+            "runtime_budget_sources_text": self.last_system_health.get("runtime_budget_sources_text"),
             "task_risk_hint_state": task_risk_hint["state"],
             "task_risk_hint_score": task_risk_hint["task_risk_hint_score"],
             "map_contamination_risk_hint": task_risk_hint["map_contamination_risk_hint"],

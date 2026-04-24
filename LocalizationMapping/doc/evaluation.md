@@ -110,7 +110,9 @@ Important artifacts:
 - `system_health.csv`: unified online health snapshots from `/racingbrain/health/system`.
   It now also records task-level risk fields such as `task_risk_state`,
   `task_risk_score`, `map_contamination_risk`, `planning_readiness_risk`, and
-  `world_model_write_policy`.
+  `world_model_write_policy`. In addition, it carries the runtime-budget state
+  machine: `runtime_budget_state`, `runtime_budget_score`,
+  `runtime_budget_total_p95_ms`, and `runtime_budget_policy`.
 - `perception_failure_state.csv`: online perception failure decisions and active
   LiDAR backend, including arbiter-side task-risk hints that explain why the
   system fell back or stayed in monitor/degraded mode.
@@ -127,9 +129,15 @@ timing, fusion quality, map stability, duplicate risk, trajectory closure indica
 camera-LiDAR alignment quality, and the aggregated status of the online health bus.
 The health bus now carries a task-facing view of risk, so replay outputs can
 separate "module warnings" from "risk to world-model integrity" and "risk to
-planning readiness".
+planning readiness". It also carries an end-to-end runtime budget so replay can
+answer whether the chain is merely semantically noisy or already missing the
+real-time envelope.
 They are not absolute accuracy metrics unless annotated cone positions or a reference
 trajectory are added later.
+
+`summary.json.runtime_budget` aggregates the online runtime-budget stream across
+the replay and reports state counts, score distributions, and end-to-end
+latency summaries.
 
 `summary.json.task_risk` aggregates the online task-risk stream across the
 entire replay and reports state counts, score distributions, and the final

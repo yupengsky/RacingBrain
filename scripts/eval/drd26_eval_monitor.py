@@ -558,6 +558,11 @@ class EvalMonitor(Node):
             "stamp": stamp,
             "overall_status": data.get("overall_status"),
             "selected_lidar_backend": data.get("selected_lidar_backend"),
+            "runtime_budget_state": data.get("runtime_budget_state"),
+            "runtime_budget_score": data.get("runtime_budget_score"),
+            "runtime_budget_total_p95_ms": data.get("runtime_budget_total_p95_ms"),
+            "runtime_budget_sources_text": data.get("runtime_budget_sources_text"),
+            "runtime_budget_policy": data.get("runtime_budget_policy"),
             "task_risk_state": data.get("task_risk_state"),
             "task_risk_score": data.get("task_risk_score"),
             "map_contamination_risk": data.get("map_contamination_risk"),
@@ -628,6 +633,10 @@ class EvalMonitor(Node):
             "fallback_available": data.get("fallback_available"),
             "primary_age_sec": data.get("primary_age_sec"),
             "fallback_age_sec": data.get("fallback_age_sec"),
+            "runtime_budget_state": data.get("runtime_budget_state"),
+            "runtime_budget_score": data.get("runtime_budget_score"),
+            "runtime_budget_total_p95_ms": data.get("runtime_budget_total_p95_ms"),
+            "runtime_budget_sources_text": data.get("runtime_budget_sources_text"),
             "task_risk_hint_state": data.get("task_risk_hint_state"),
             "task_risk_hint_score": data.get("task_risk_hint_score"),
             "map_contamination_risk_hint": data.get("map_contamination_risk_hint"),
@@ -691,6 +700,11 @@ class EvalMonitor(Node):
             topic: stats.summary(self.start_wall)
             for topic, stats in sorted(self.topic_stats.items())
         }
+        active_health_rows = [
+            row for row in self.health_rows
+            if str(row.get("overall_status")) not in {"stale", "missing"}
+        ]
+        risk_rows = active_health_rows or self.health_rows
         latency_by_name: Dict[str, List[float]] = defaultdict(list)
         for row in self.latency_rows:
             latency_by_name[str(row["name"])].append(float(row["delta_sec"]))
@@ -818,17 +832,30 @@ class EvalMonitor(Node):
                 "last": self.last_system_health,
                 "last_non_stale": self.last_non_stale_system_health,
             },
-            "task_risk": {
-                "frames": len(self.health_rows),
-                "state_counts": dict(Counter(str(r.get("task_risk_state")) for r in self.health_rows if r.get("task_risk_state") is not None)),
-                "task_risk_score": summarize(r.get("task_risk_score") for r in self.health_rows),
-                "map_contamination_risk": summarize(r.get("map_contamination_risk") for r in self.health_rows),
-                "planning_readiness_risk": summarize(r.get("planning_readiness_risk") for r in self.health_rows),
-                "world_model_write_policy_counts": dict(
-                    Counter(str(r.get("world_model_write_policy")) for r in self.health_rows if r.get("world_model_write_policy") is not None)
+            "runtime_budget": {
+                "frames": len(risk_rows),
+                "active_frames": len(active_health_rows),
+                "state_counts": dict(Counter(str(r.get("runtime_budget_state")) for r in risk_rows if r.get("runtime_budget_state") is not None)),
+                "runtime_budget_score": summarize(r.get("runtime_budget_score") for r in risk_rows),
+                "runtime_budget_total_p95_ms": summarize(r.get("runtime_budget_total_p95_ms") for r in risk_rows),
+                "policy_counts": dict(
+                    Counter(str(r.get("runtime_budget_policy")) for r in risk_rows if r.get("runtime_budget_policy") is not None)
                 ),
-                "last_sources_text": None if not self.health_rows else self.health_rows[-1].get("risk_sources_text"),
-                "last_write_policy": None if not self.health_rows else self.health_rows[-1].get("world_model_write_policy"),
+                "last_state": None if not risk_rows else risk_rows[-1].get("runtime_budget_state"),
+                "last_sources_text": None if not risk_rows else risk_rows[-1].get("runtime_budget_sources_text"),
+            },
+            "task_risk": {
+                "frames": len(risk_rows),
+                "active_frames": len(active_health_rows),
+                "state_counts": dict(Counter(str(r.get("task_risk_state")) for r in risk_rows if r.get("task_risk_state") is not None)),
+                "task_risk_score": summarize(r.get("task_risk_score") for r in risk_rows),
+                "map_contamination_risk": summarize(r.get("map_contamination_risk") for r in risk_rows),
+                "planning_readiness_risk": summarize(r.get("planning_readiness_risk") for r in risk_rows),
+                "world_model_write_policy_counts": dict(
+                    Counter(str(r.get("world_model_write_policy")) for r in risk_rows if r.get("world_model_write_policy") is not None)
+                ),
+                "last_sources_text": None if not risk_rows else risk_rows[-1].get("risk_sources_text"),
+                "last_write_policy": None if not risk_rows else risk_rows[-1].get("world_model_write_policy"),
             },
             "perception_failure": {
                 "frames": len(self.failure_state_rows),
@@ -904,6 +931,7 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
     trajectory = summary.get("trajectory", {})
     mapping_debug = summary.get("mapping_debug", {})
     system_health = summary.get("system_health", {})
+    runtime_budget = summary.get("runtime_budget", {})
     task_risk = summary.get("task_risk", {})
     perception_failure = summary.get("perception_failure", {})
     planning = summary.get("planning", {})
@@ -981,9 +1009,20 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
             f"- Last overall status: `{(system_health.get('last') or {}).get('overall_status')}`",
             f"- Last non-stale status: `{(system_health.get('last_non_stale') or {}).get('overall_status')}`",
             "",
+            "## Runtime Budget",
+            "",
+            f"- Budget frames: `{runtime_budget.get('frames')}`",
+            f"- Active budget frames: `{runtime_budget.get('active_frames')}`",
+            f"- Budget state counts: `{json.dumps(runtime_budget.get('state_counts', {}), ensure_ascii=False)}`",
+            f"- Runtime-budget score mean: `{fmt(runtime_budget.get('runtime_budget_score', {}).get('mean'))}`",
+            f"- End-to-end p95 latency mean: `{fmt(runtime_budget.get('runtime_budget_total_p95_ms', {}).get('mean'))} ms`",
+            f"- Last budget state: `{runtime_budget.get('last_state')}`",
+            f"- Last budget sources: `{runtime_budget.get('last_sources_text')}`",
+            "",
             "## Task Risk",
             "",
             f"- Task-risk frames: `{task_risk.get('frames')}`",
+            f"- Active task-risk frames: `{task_risk.get('active_frames')}`",
             f"- Task-risk state counts: `{json.dumps(task_risk.get('state_counts', {}), ensure_ascii=False)}`",
             f"- Task-risk score mean: `{fmt(task_risk.get('task_risk_score', {}).get('mean'))}`",
             f"- Map contamination risk mean: `{fmt(task_risk.get('map_contamination_risk', {}).get('mean'))}`",

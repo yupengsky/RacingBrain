@@ -25,6 +25,14 @@ def clamp01(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
 
 
+RUNTIME_BUDGET_RANK = {
+    "nominal": 0,
+    "strained": 1,
+    "degraded": 2,
+    "freeze": 3,
+}
+
+
 def now_sec(node: Node) -> float:
     return float(node.get_clock().now().nanoseconds) * 1e-9
 
@@ -140,6 +148,18 @@ class RuntimeHealthMonitor(Node):
         self.declare_parameter("startup_grace_sec", 10.0)
         self.declare_parameter("history_size", 30)
         self.declare_parameter("failure_state_topic", "/racingbrain/perception/failure_state")
+        self.declare_parameter("runtime_budget.yolo_warn_ms", 120.0)
+        self.declare_parameter("runtime_budget.yolo_freeze_ms", 180.0)
+        self.declare_parameter("runtime_budget.lidar_pointpillars_warn_ms", 140.0)
+        self.declare_parameter("runtime_budget.lidar_pointpillars_freeze_ms", 220.0)
+        self.declare_parameter("runtime_budget.lidar_cluster_warn_ms", 320.0)
+        self.declare_parameter("runtime_budget.lidar_cluster_freeze_ms", 450.0)
+        self.declare_parameter("runtime_budget.fusion_warn_ms", 8.0)
+        self.declare_parameter("runtime_budget.fusion_freeze_ms", 16.0)
+        self.declare_parameter("runtime_budget.mapping_warn_ms", 6.0)
+        self.declare_parameter("runtime_budget.mapping_freeze_ms", 14.0)
+        self.declare_parameter("runtime_budget.end_to_end_warn_ms", 420.0)
+        self.declare_parameter("runtime_budget.end_to_end_freeze_ms", 620.0)
 
         self.expected_perception = bool(self.get_parameter("expected_perception").value)
         self.expected_mapping = bool(self.get_parameter("expected_mapping").value)
@@ -149,6 +169,32 @@ class RuntimeHealthMonitor(Node):
         self.startup_grace_sec = max(self.publish_period_sec, float(self.get_parameter("startup_grace_sec").value))
         self.history_size = max(5, int(self.get_parameter("history_size").value))
         self.failure_state_topic = str(self.get_parameter("failure_state_topic").value)
+        self.runtime_budget_limits = {
+            "yolo": {
+                "warn_ms": float(self.get_parameter("runtime_budget.yolo_warn_ms").value),
+                "freeze_ms": float(self.get_parameter("runtime_budget.yolo_freeze_ms").value),
+            },
+            "lidar_pointpillars": {
+                "warn_ms": float(self.get_parameter("runtime_budget.lidar_pointpillars_warn_ms").value),
+                "freeze_ms": float(self.get_parameter("runtime_budget.lidar_pointpillars_freeze_ms").value),
+            },
+            "lidar_cluster": {
+                "warn_ms": float(self.get_parameter("runtime_budget.lidar_cluster_warn_ms").value),
+                "freeze_ms": float(self.get_parameter("runtime_budget.lidar_cluster_freeze_ms").value),
+            },
+            "fusion": {
+                "warn_ms": float(self.get_parameter("runtime_budget.fusion_warn_ms").value),
+                "freeze_ms": float(self.get_parameter("runtime_budget.fusion_freeze_ms").value),
+            },
+            "mapping": {
+                "warn_ms": float(self.get_parameter("runtime_budget.mapping_warn_ms").value),
+                "freeze_ms": float(self.get_parameter("runtime_budget.mapping_freeze_ms").value),
+            },
+            "end_to_end": {
+                "warn_ms": float(self.get_parameter("runtime_budget.end_to_end_warn_ms").value),
+                "freeze_ms": float(self.get_parameter("runtime_budget.end_to_end_freeze_ms").value),
+            },
+        }
 
         self.start_wall = time.monotonic()
         self.histories = {
@@ -214,7 +260,8 @@ class RuntimeHealthMonitor(Node):
             "fusion": self.build_fusion_status(wall_time, uptime_sec),
             "mapping": self.build_mapping_status(wall_time, uptime_sec),
         }
-        task_risk = self.build_task_risk(components, wall_time, uptime_sec)
+        runtime_budget = self.build_runtime_budget(components, wall_time, uptime_sec)
+        task_risk = self.build_task_risk(components, runtime_budget, wall_time, uptime_sec)
 
         overall_status = "ok"
         alerts: List[str] = []
@@ -229,8 +276,9 @@ class RuntimeHealthMonitor(Node):
             component = components[name]
             best_rank = max(best_rank, STATUS_RANK.get(str(component["status"]), STATUS_RANK["warn"]))
             alerts.extend(component.get("alerts", []))
+        alerts.extend(runtime_budget.get("alerts", []))
         alerts.extend(task_risk.get("alerts", []))
-        if task_risk["state"] in {"degraded", "freeze"}:
+        if runtime_budget["state"] in {"degraded", "freeze"} or task_risk["state"] in {"degraded", "freeze"}:
             best_rank = max(best_rank, STATUS_RANK["warn"])
 
         for status, rank in STATUS_RANK.items():
@@ -250,6 +298,13 @@ class RuntimeHealthMonitor(Node):
             "expected_mapping": self.expected_mapping,
             "alerts": alerts,
             "components": components,
+            "runtime_budget_state": runtime_budget["state"],
+            "runtime_budget_score": runtime_budget["score"],
+            "runtime_budget_sources": runtime_budget["sources"],
+            "runtime_budget_sources_text": runtime_budget["sources_text"],
+            "runtime_budget_total_p95_ms": runtime_budget["total_p95_ms"],
+            "runtime_budget_policy": runtime_budget["policy"],
+            "runtime_budget": runtime_budget,
             "task_risk_state": task_risk["state"],
             "task_risk_score": task_risk["task_risk_score"],
             "map_contamination_risk": task_risk["map_contamination_risk"],
@@ -470,6 +525,7 @@ class RuntimeHealthMonitor(Node):
                 "mean_stable_cones": mean(stable_cones),
                 "mean_observation_utilization": mean(utilization),
                 "mean_sync_callback_ms": mean(sync_callback_ms),
+                "p95_sync_callback_ms": percentile(sync_callback_ms, 0.95),
                 "map_locked": None if latest is None else as_bool(latest.get("map_locked")),
                 "last_risk_gate_state": None if latest is None else latest.get("risk_gate_state"),
                 "last_risk_gate_reasons": None if latest is None else latest.get("risk_gate_reasons"),
@@ -492,9 +548,162 @@ class RuntimeHealthMonitor(Node):
                 info["alerts"].append("mapping_sync_latency_high")
         return info
 
+    def build_runtime_budget(
+        self,
+        components: Dict[str, Dict[str, Any]],
+        wall_time: float,
+        uptime_sec: float,
+    ) -> Dict[str, Any]:
+        del wall_time, uptime_sec
+
+        sources: List[str] = []
+        alerts: List[str] = []
+        stage_details: Dict[str, Dict[str, Any]] = {}
+        overall_state = "nominal"
+
+        failure_state = self.last_failure_state if self.last_failure_state_wall is not None else {}
+        selected_lidar_backend = str(
+            (failure_state or {}).get("active_lidar_backend")
+            or self.selected_lidar_backend
+        ).strip().lower()
+        lidar_profile = "lidar_cluster" if selected_lidar_backend == "cluster" else "lidar_pointpillars"
+
+        def promote(state: str) -> None:
+            nonlocal overall_state
+            if RUNTIME_BUDGET_RANK[state] > RUNTIME_BUDGET_RANK[overall_state]:
+                overall_state = state
+
+        def evaluate_stage(
+            stage_name: str,
+            observed_ms: Optional[float],
+            warn_ms: float,
+            freeze_ms: float,
+            status: Optional[str],
+        ) -> Dict[str, Any]:
+            state = "nominal"
+            utilization = None if observed_ms is None else observed_ms / warn_ms
+            if status in {"missing", "stale"}:
+                state = "freeze"
+                append_unique(sources, f"{stage_name}_stale")
+            elif observed_ms is None:
+                state = "strained"
+                append_unique(sources, f"{stage_name}_budget_unknown")
+            elif observed_ms >= freeze_ms:
+                state = "freeze"
+                append_unique(sources, f"{stage_name}_budget_freeze")
+            elif observed_ms >= warn_ms:
+                state = "degraded"
+                append_unique(sources, f"{stage_name}_budget_degraded")
+            elif observed_ms >= warn_ms * 0.85:
+                state = "strained"
+                append_unique(sources, f"{stage_name}_budget_strained")
+            promote(state)
+            return {
+                "state": state,
+                "observed_ms": observed_ms,
+                "warn_ms": warn_ms,
+                "freeze_ms": freeze_ms,
+                "utilization": utilization,
+            }
+
+        yolo = components.get("yolo", {})
+        lidar = components.get("lidar", {})
+        fusion = components.get("fusion", {})
+        mapping = components.get("mapping", {})
+
+        stage_details["yolo"] = evaluate_stage(
+            "yolo",
+            as_float(yolo.get("p95_total_ms")),
+            self.runtime_budget_limits["yolo"]["warn_ms"],
+            self.runtime_budget_limits["yolo"]["freeze_ms"],
+            str(yolo.get("status") or ""),
+        )
+        stage_details["lidar"] = evaluate_stage(
+            "lidar",
+            as_float(lidar.get("p95_total_ms")),
+            self.runtime_budget_limits[lidar_profile]["warn_ms"],
+            self.runtime_budget_limits[lidar_profile]["freeze_ms"],
+            str(lidar.get("status") or ""),
+        )
+        stage_details["fusion"] = evaluate_stage(
+            "fusion",
+            as_float(fusion.get("p95_total_ms")),
+            self.runtime_budget_limits["fusion"]["warn_ms"],
+            self.runtime_budget_limits["fusion"]["freeze_ms"],
+            str(fusion.get("status") or ""),
+        )
+        stage_details["mapping"] = evaluate_stage(
+            "mapping",
+            as_float(mapping.get("p95_sync_callback_ms")),
+            self.runtime_budget_limits["mapping"]["warn_ms"],
+            self.runtime_budget_limits["mapping"]["freeze_ms"],
+            str(mapping.get("status") or ""),
+        )
+
+        total_p95_ms = 0.0
+        has_total = False
+        for stage_name in ("yolo", "lidar", "fusion", "mapping"):
+            observed_ms = as_float(stage_details[stage_name].get("observed_ms"))
+            if observed_ms is not None:
+                total_p95_ms += observed_ms
+                has_total = True
+
+        total_state = "nominal"
+        total_warn_ms = self.runtime_budget_limits["end_to_end"]["warn_ms"]
+        total_freeze_ms = self.runtime_budget_limits["end_to_end"]["freeze_ms"]
+        total_utilization = None if not has_total else total_p95_ms / total_warn_ms
+        if has_total:
+            if total_p95_ms >= total_freeze_ms:
+                total_state = "freeze"
+                append_unique(sources, "end_to_end_budget_freeze")
+            elif total_p95_ms >= total_warn_ms:
+                total_state = "degraded"
+                append_unique(sources, "end_to_end_budget_degraded")
+            elif total_p95_ms >= total_warn_ms * 0.85:
+                total_state = "strained"
+                append_unique(sources, "end_to_end_budget_strained")
+            promote(total_state)
+        else:
+            total_state = "unknown"
+
+        if overall_state == "freeze":
+            policy = "freeze_new_landmarks"
+            score = 0.95 if total_state != "unknown" else 0.90
+            alerts.extend(["runtime_budget_freeze", "runtime_budget_overrun"])
+        elif overall_state == "degraded":
+            policy = "downweight_observations"
+            score = 0.72
+            alerts.extend(["runtime_budget_degraded", "runtime_budget_overrun"])
+        elif overall_state == "strained":
+            policy = "monitor_only"
+            score = 0.40
+            alerts.append("runtime_budget_strained")
+        else:
+            policy = "open"
+            score = clamp01(total_utilization or 0.0) * 0.3
+
+        return {
+            "state": overall_state,
+            "score": score,
+            "policy": policy,
+            "selected_lidar_budget_profile": lidar_profile.replace("lidar_", ""),
+            "sources": sources,
+            "sources_text": ";".join(sources) if sources else "none",
+            "alerts": sorted(set(alerts)),
+            "total_p95_ms": total_p95_ms if has_total else None,
+            "total_utilization": total_utilization,
+            "total_state": total_state,
+            "limits_ms": {
+                "end_to_end_warn_ms": total_warn_ms,
+                "end_to_end_freeze_ms": total_freeze_ms,
+            },
+            "stages": stage_details,
+        }
+
     def build_task_risk(
         self,
         components: Dict[str, Dict[str, Any]],
+        runtime_budget: Dict[str, Any],
         wall_time: float,
         uptime_sec: float,
     ) -> Dict[str, Any]:
@@ -546,6 +755,17 @@ class RuntimeHealthMonitor(Node):
             and str(failure_state.get("mode") or "auto") == "auto"
         ):
             raise_risk(0.35, 0.25, "cluster_fallback_active")
+
+        runtime_budget_state = str(runtime_budget.get("state") or "nominal")
+        runtime_budget_sources = runtime_budget.get("sources", [])
+        if runtime_budget_state == "freeze":
+            raise_risk(0.92, 0.90, "runtime_budget_freeze")
+        elif runtime_budget_state == "degraded":
+            raise_risk(0.65, 0.72, "runtime_budget_degraded")
+        elif runtime_budget_state == "strained":
+            raise_risk(0.28, 0.36, "runtime_budget_strained")
+        for item in runtime_budget_sources if isinstance(runtime_budget_sources, list) else []:
+            append_unique(risk_sources, f"runtime:{item}")
 
         yolo = components.get("yolo", {})
         lidar = components.get("lidar", {})
