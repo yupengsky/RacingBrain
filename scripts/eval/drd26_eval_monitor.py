@@ -943,9 +943,52 @@ def read_bag_metadata(dataset: Optional[str]) -> Dict[str, Any]:
     }
 
 
+def infer_effective_lidar_backend(summary: Dict[str, Any], scenario: Dict[str, Any]) -> str:
+    perception_failure = summary.get("perception_failure", {}) or {}
+    live_failure = perception_failure.get("last_live") or perception_failure.get("last") or {}
+    active_backend = live_failure.get("active_lidar_backend")
+    if active_backend:
+        return str(active_backend)
+
+    active_counts = perception_failure.get("active_backend_counts", {}) or {}
+    if active_counts:
+        return str(max(active_counts.items(), key=lambda item: int(item[1]))[0])
+
+    processing_time = summary.get("processing_time_ms", {}) or {}
+    if "pointpillars" in processing_time:
+        return "pointpillars"
+    if "lidar_cluster" in processing_time:
+        return "cluster"
+
+    requested = str(scenario.get("lidar_backend") or "")
+    if requested in {"cluster", "pointpillars"}:
+        return requested
+    return "unknown"
+
+
+def add_lidar_backend_summary(summary: Dict[str, Any], scenario: Optional[Dict[str, Any]]) -> None:
+    scenario = scenario or {}
+    preflight = scenario.get("pointpillars_preflight")
+    if not isinstance(preflight, dict):
+        preflight = {
+            "requested": str(scenario.get("lidar_backend") or "") in {"pointpillars", "auto"},
+            "status": "unknown",
+            "message": "No PointPillars preflight result was recorded for this run.",
+            "device_count": None,
+        }
+
+    summary["lidar_backend"] = {
+        "requested": scenario.get("lidar_backend"),
+        "effective": infer_effective_lidar_backend(summary, scenario),
+        "pointpillars_preflight": preflight,
+    }
+
+
 def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
     topics = summary.get("topics", {})
     scenario = summary.get("scenario", {}) or {}
+    lidar_backend = summary.get("lidar_backend", {}) or {}
+    pointpillars_preflight = lidar_backend.get("pointpillars_preflight", {}) or {}
     perception = summary.get("perception", {})
     map_metrics = summary.get("map", {})
     map_layers = summary.get("map_layers", {})
@@ -974,6 +1017,8 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
         f"- Success: `{summary.get('success')}`",
         f"- Dataset: `{summary.get('dataset')}`",
         f"- Scenario: `{scenario.get('profile', 'none')}`",
+        f"- Requested LiDAR backend: `{lidar_backend.get('requested')}`",
+        f"- Effective LiDAR backend: `{lidar_backend.get('effective')}`",
         f"- Elapsed wall time: `{fmt(summary.get('elapsed_wall_sec'))} s`",
         f"- Duplicate threshold: `{fmt(summary.get('duplicate_threshold_m'))} m`",
         "",
@@ -984,7 +1029,6 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
                 "## Scenario",
                 "",
                 f"- Profile: `{scenario.get('profile')}`",
-                f"- LiDAR backend: `{scenario.get('lidar_backend')}`",
                 f"- Fault start: `{fmt(scenario.get('fault_start_sec'))} s`",
                 f"- Fault duration: `{fmt(scenario.get('fault_duration_sec'))} s`",
                 f"- Fault injector enabled: `{scenario.get('use_fault_injector')}`",
@@ -994,6 +1038,14 @@ def write_report(log_dir: Path, summary: Dict[str, Any]) -> None:
         )
     lines.extend(
         [
+        "## LiDAR Backend",
+        "",
+        f"- Requested backend: `{lidar_backend.get('requested')}`",
+        f"- Effective backend: `{lidar_backend.get('effective')}`",
+        f"- PointPillars preflight status: `{pointpillars_preflight.get('status')}`",
+        f"- PointPillars preflight message: `{pointpillars_preflight.get('message')}`",
+        f"- PointPillars device count: `{pointpillars_preflight.get('device_count')}`",
+        "",
         "## Topic Health",
         "",
         "| Topic | Count | Wall Hz | Stamp Hz | First Wall s |",
@@ -1290,6 +1342,7 @@ def main() -> int:
     finally:
         summary = monitor.build_summary(args.dataset, bag_metadata)
         summary["scenario"] = scenario
+        add_lidar_backend_summary(summary, scenario)
         (log_dir / "summary.json").write_text(
             json.dumps(summary, indent=2, ensure_ascii=False),
             encoding="utf-8",

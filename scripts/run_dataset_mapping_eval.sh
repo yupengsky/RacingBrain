@@ -210,13 +210,59 @@ export \
 
 SCENARIO_FILE="${LOG_DIR}/scenario.json"
 python3 - "${SCENARIO_FILE}" <<'PY'
+import ctypes
 import json
 import os
 import sys
 
+
+def pointpillars_preflight(requested_backend):
+    if requested_backend not in {"pointpillars", "auto"}:
+        return {
+            "requested": False,
+            "status": "not_requested",
+            "message": "PointPillars was not requested for this run.",
+            "device_count": None,
+        }
+    try:
+        cudart = ctypes.CDLL("libcudart.so")
+        device_count = ctypes.c_int(0)
+        status = int(cudart.cudaGetDeviceCount(ctypes.byref(device_count)))
+        if status != 0:
+            message = "unknown error"
+            try:
+                cudart.cudaGetErrorString.restype = ctypes.c_char_p
+                raw = cudart.cudaGetErrorString(status)
+                if raw:
+                    message = raw.decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            return {
+                "requested": True,
+                "status": "unavailable",
+                "message": f"cudaGetDeviceCount={status} ({message})",
+                "device_count": None,
+            }
+        return {
+            "requested": True,
+            "status": "ok" if device_count.value > 0 else "unavailable",
+            "message": f"cudaGetDeviceCount=0, devices={device_count.value}",
+            "device_count": device_count.value,
+        }
+    except Exception as exc:
+        return {
+            "requested": True,
+            "status": "error",
+            "message": str(exc),
+            "device_count": None,
+        }
+
+
+lidar_backend = os.environ["LIDAR_BACKEND"]
 scenario = {
     "profile": os.environ["FAULT_PROFILE"],
-    "lidar_backend": os.environ["LIDAR_BACKEND"],
+    "lidar_backend": lidar_backend,
+    "pointpillars_preflight": pointpillars_preflight(lidar_backend),
     "mapping_gate": os.environ.get("MAPPING_GATE", "true").lower() == "true",
     "fault_start_sec": float(os.environ["FAULT_START_SEC"]),
     "fault_duration_sec": float(os.environ["FAULT_DURATION_SEC"]),
