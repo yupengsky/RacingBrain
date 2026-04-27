@@ -8,6 +8,10 @@ ROS_VENV_DIR="${ROS_VENV_DIR:-}"
 LOCAL_ROS_DEPS_PREFIX="${LOCAL_ROS_DEPS_PREFIX:-${WORKSPACE_DIR}/.ros_deps/opt/ros/humble}"
 CSF_ROOT="${CSF_ROOT:-${WORKSPACE_DIR}/.ros_deps/csf}"
 
+if [[ -z "${ROS_VENV_DIR}" && -x "${WORKSPACE_DIR}/.venv_ros_ml/bin/python3" ]]; then
+  ROS_VENV_DIR="${WORKSPACE_DIR}/.venv_ros_ml"
+fi
+
 if [[ ! -f "${ROS_SETUP}" ]]; then
   echo "ROS setup file not found: ${ROS_SETUP}" >&2
   exit 1
@@ -95,14 +99,16 @@ PY
 cd "${WORKSPACE_DIR}"
 
 DEFAULT_BASE_PATHS=(
-  "gnss/gnss_ins_msg"
-  "gnss/cpp_pubsub"
-  "slam"
-  "perception/src/cone_ws/src/cone_interfaces"
-  "perception/src/cone_ws/src/cone_detector"
-  "perception/src/cone_segmentation_test_3d/src/test_cone_segmentation"
-  "perception/src/fs_fusion_box"
-  "perception/src/run_perception"
+  "LocalizationMapping/gnss/gnss_ins_msg"
+  "LocalizationMapping/gnss/cpp_pubsub"
+  "LocalizationMapping/slam"
+  "LocalizationMapping/perception/src/cone_ws/src/cone_interfaces"
+  "LocalizationMapping/perception/src/cone_ws/src/cone_detector"
+  "LocalizationMapping/perception/src/cone_segmentation_test_3d/src/test_cone_segmentation"
+  "LocalizationMapping/perception/src/fs_fusion_box"
+  "LocalizationMapping/perception/src/run_perception"
+  "LocalizationMapping/PointPillars/trt_cone_detector"
+  "LocalizationMapping/RacingBrain"
 )
 
 COLCON_ARGS=("$@")

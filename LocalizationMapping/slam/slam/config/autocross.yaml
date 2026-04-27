@@ -1,0 +1,38 @@
+# slam/slam/config/autocross.yaml
+/**:
+  ros__parameters:
+    track_type: "autocross"
+
+    loop_closure:
+      distance_threshold: 1.5   # 几何距离阈值
+      approach_angle_threshold: 35.0     # 运动朝向阈值
+      min_approach_speed: 0.8    # 最低接近速度
+      min_consecutive_detections: 2    # 连续满足回环条件帧数最小值（用于冲刺圈）
+      max_consecutive_detections: 5    # 连续满足回环条件帧数最大值（用于探索圈）
+      min_time_between_detections: 3.0  # 触发回环冷却时间
+      history_buffer_size: 10      # 历史轨迹缓存
+      min_lap_time: 20.0    # 触发回环最小圏时
+
+    mapping:
+      kf_q_base: 0.01   # 卡尔曼过程噪声，即Q值，用于动态更新锥桶坐标
+      kf_p_init: 1.0   # 初始地图不确定度，用于新锥桶初始化
+      mahalanobis_thresh: 2.5  # 马氏距离阈值，用于锥桶匹配
+      max_match_dist: 1.0  # 欧式距离阈值，用于马氏距离匹配前的粗筛
+      max_lidar_range: 10.0   # 最大感知距离，用于基于距离计算置信度
+      lidar_blind_range: 1.0  # 由于雷达线束高度打不到近处地面，引起呈扇形的雷达视野死角的半径
+      fov_angle: 120.0   # 雷达视场角，用于计算锥桶是否在视野范围内
+      distance_factor: 8.0  # 协方差矩阵随距离而衰减的分母，用于噪声建模
+      sigma_long: 0.4   # 纵向噪声
+      sigma_lat: 0.2  # 横向噪声
+       # 基于贝叶斯对数滤波(Log-Odds)的计算公式: L_new = L_old + ln(p/1-p)
+      l_hit: 1.1   # 对应75%的存在概率
+      l_miss: -0.4  # 对应约38%的存在概率
+      l_min: -2.2   # 对应10%的存在概率
+      l_max: 8.0    # 对应99.7%的存在概率
+      l_stable: 1.4 # 对应80%的存在概率，系统判定为稳定锥桶，选择发布
+      speed_factor: 0.3   # 探索圈结束后由于速度加快带来的观测不确定度惩罚
+      gyro_factor: 2.0   # 探索圈结束后由于弯道转向带来的观测不确定度惩罚
+      lat_factor: 0.5     # 过弯时的横向误差惩罚
+      half_tube_width: 2.0  # ROI管道的一半宽度
+      max_tube_length: 10.0 # ROI管道长度的最大值
+      max_straight_angular: 0.1   # 直线行驶时可能的最大角速度（绝对值）；0.1rad/s 对应 5.73度/s

@@ -39,6 +39,21 @@ if [[ "${RESTORE_NOUNSET}" -eq 1 ]]; then
   set -u
 fi
 
+VENV_PYTHONPATH="$(
+  "${VENV_DIR}/bin/python3" - <<'PY'
+import sysconfig
+
+paths = [
+    sysconfig.get_path("purelib"),
+    sysconfig.get_path("platlib"),
+]
+print(":".join(dict.fromkeys(path for path in paths if path)))
+PY
+)"
+if [[ -n "${VENV_PYTHONPATH}" ]]; then
+  export PYTHONPATH="${VENV_PYTHONPATH}${PYTHONPATH:+:${PYTHONPATH}}"
+fi
+
 if [[ -d "${LOCAL_ROS_DEPS_PREFIX}" ]]; then
   export AMENT_PREFIX_PATH="${LOCAL_ROS_DEPS_PREFIX}${AMENT_PREFIX_PATH:+:${AMENT_PREFIX_PATH}}"
   export CMAKE_PREFIX_PATH="${LOCAL_ROS_DEPS_PREFIX}${CMAKE_PREFIX_PATH:+:${CMAKE_PREFIX_PATH}}"

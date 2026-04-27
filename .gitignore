@@ -37,20 +37,22 @@ compile_commands.json
 /data/
 /datasets/
 /recordings/
+/tmp.zip
+/ref.pdf
 
 # Imported perception workspace noise and large local assets
-/perception/src/cone_ws/.git/
-/perception/src/cone_ws/.venv/
-/perception/src/cone_ws/.vscode/
-/perception/src/cone_ws/data/
-/perception/src/cone_ws/dataset/
-/perception/src/cone_ws/datasets/
-/perception/src/cone_ws/rosbag/
-/perception/src/cone_ws/runs/
-/perception/src/cone_ws/src/cone_detector/runs/
-/perception/src/cone_ws/models/*.pt
-/perception/src/cone_ws/models/*.onnx
-/perception/src/cone_ws/models/*.engine
+/LocalizationMapping/perception/src/cone_ws/.git/
+/LocalizationMapping/perception/src/cone_ws/.venv/
+/LocalizationMapping/perception/src/cone_ws/.vscode/
+/LocalizationMapping/perception/src/cone_ws/data/
+/LocalizationMapping/perception/src/cone_ws/dataset/
+/LocalizationMapping/perception/src/cone_ws/datasets/
+/LocalizationMapping/perception/src/cone_ws/rosbag/
+/LocalizationMapping/perception/src/cone_ws/runs/
+/LocalizationMapping/perception/src/cone_ws/src/cone_detector/runs/
+/LocalizationMapping/perception/src/cone_ws/models/*.pt
+/LocalizationMapping/perception/src/cone_ws/models/*.onnx
+/LocalizationMapping/perception/src/cone_ws/models/*.engine
 
 # Editor and OS noise
 .vscode/
