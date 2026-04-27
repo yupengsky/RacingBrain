@@ -15,6 +15,7 @@ RVIZ="${RVIZ:-false}"
 ENABLE_PLANNING="${ENABLE_PLANNING:-false}"
 DUPLICATE_THRESHOLD="${DUPLICATE_THRESHOLD:-0.75}"
 LIDAR_BACKEND="${LIDAR_BACKEND:-auto}"
+LIDAR_VERIFIER="${LIDAR_VERIFIER:-true}"
 MAPPING_GATE="${MAPPING_GATE:-true}"
 FAULT_PROFILE="${FAULT_PROFILE:-none}"
 FAULT_START_SEC="${FAULT_START_SEC:-0.0}"
@@ -263,6 +264,7 @@ scenario = {
     "profile": os.environ["FAULT_PROFILE"],
     "lidar_backend": lidar_backend,
     "pointpillars_preflight": pointpillars_preflight(lidar_backend),
+    "lidar_verifier": os.environ.get("LIDAR_VERIFIER", "true").lower() == "true",
     "mapping_gate": os.environ.get("MAPPING_GATE", "true").lower() == "true",
     "fault_start_sec": float(os.environ["FAULT_START_SEC"]),
     "fault_duration_sec": float(os.environ["FAULT_DURATION_SEC"]),
@@ -309,6 +311,7 @@ echo "ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}"
 echo "Bag rate: ${BAG_RATE}"
 echo "Track: ${TRACK}"
 echo "LiDAR backend: ${LIDAR_BACKEND}"
+echo "LiDAR verifier: ${LIDAR_VERIFIER}"
 echo "Mapping gate: ${MAPPING_GATE}"
 echo "Planning interface: ${ENABLE_PLANNING}"
 echo "Fault profile: ${FAULT_PROFILE}"
@@ -323,6 +326,7 @@ STACK_CMD=(
   "track:=${TRACK}"
   "rviz:=${RVIZ}"
   "lidar_backend:=${LIDAR_BACKEND}"
+  "lidar_verifier:=${LIDAR_VERIFIER}"
   "mapping_gate:=${MAPPING_GATE}"
   "eval_debug:=true"
   "enable_planning:=${ENABLE_PLANNING}"

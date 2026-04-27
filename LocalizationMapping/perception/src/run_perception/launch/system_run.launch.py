@@ -160,11 +160,35 @@ def cluster_node(lidar_topic, output_topic, metrics_topic, eval_debug, health_me
     )
 
 
-def build_lidar_launch(context, eval_debug, health_metrics, lidar_topic, lidar_backend):
+def pointpillars_verifier_node(lidar_topic, input_topic, output_topic, calibration_file):
+    return Node(
+        package='racingbrain',
+        executable='pointpillars_local_verifier',
+        name='pointpillars_local_verifier',
+        output='screen',
+        parameters=[{
+            'input_cloud_topic': lidar_topic,
+            'input_cones_topic': input_topic,
+            'camera_cones_topic': '/yolo/cones',
+            'output_topic': output_topic,
+            'metrics_topic': '/perception/lidar/pointpillars/verifier/metrics',
+            'calibration_file': calibration_file,
+            'min_points': 3,
+            'geometry_pass_threshold': 0.55,
+            'total_pass_threshold': 0.58,
+            'temporal_smoothing_alpha': 0.85,
+            'passthrough_on_missing_cloud': False,
+        }]
+    )
+
+
+def build_lidar_launch(context, eval_debug, health_metrics, lidar_topic, lidar_backend, lidar_verifier, fusion_calibration_file):
     backend = _perform(context, lidar_backend).strip().lower()
     eval_debug_value = _as_bool(context, eval_debug)
     health_metrics_value = _as_bool(context, health_metrics)
+    verifier_enabled = _as_bool(context, lidar_verifier)
     lidar_topic_value = _perform(context, lidar_topic)
+    calibration_file_value = _perform(context, fusion_calibration_file)
     pointpillars_executable_available = False
     pointpillars_runtime_available = False
     if backend in {'pointpillars', 'auto'}:
@@ -174,6 +198,7 @@ def build_lidar_launch(context, eval_debug, health_metrics, lidar_topic, lidar_b
 
     generic_output = '/cone_detection_custom'
     generic_metrics = '/perception/lidar/evaluation/metrics'
+    pointpillars_raw_output = '/perception/lidar/pointpillars/raw_cones'
     pointpillars_output = '/perception/lidar/pointpillars/cones'
     pointpillars_metrics = '/perception/lidar/pointpillars/evaluation/metrics'
     cluster_output = '/perception/lidar/cluster/cones'
@@ -185,6 +210,22 @@ def build_lidar_launch(context, eval_debug, health_metrics, lidar_topic, lidar_b
         ]
 
     if backend == 'pointpillars' and pointpillars_available:
+        if verifier_enabled:
+            return [
+                pointpillars_node(
+                    lidar_topic_value,
+                    pointpillars_raw_output,
+                    generic_metrics,
+                    eval_debug_value,
+                    health_metrics_value,
+                ),
+                pointpillars_verifier_node(
+                    lidar_topic_value,
+                    pointpillars_raw_output,
+                    generic_output,
+                    calibration_file_value,
+                ),
+            ]
         return [
             pointpillars_node(lidar_topic_value, generic_output, generic_metrics, eval_debug_value, health_metrics_value)
         ]
@@ -222,17 +263,27 @@ def build_lidar_launch(context, eval_debug, health_metrics, lidar_topic, lidar_b
         )
     ]
     if pointpillars_available:
-        actions.insert(
-            0,
+        pointpillars_detector_output = pointpillars_raw_output if verifier_enabled else pointpillars_output
+        pointpillars_actions = [
             pointpillars_node(
                 lidar_topic_value,
-                pointpillars_output,
+                pointpillars_detector_output,
                 pointpillars_metrics,
                 eval_debug_value,
                 health_metrics_value,
                 marker_topic='/perception/lidar/pointpillars/markers',
+            ),
+        ]
+        if verifier_enabled:
+            pointpillars_actions.append(
+                pointpillars_verifier_node(
+                    lidar_topic_value,
+                    pointpillars_raw_output,
+                    pointpillars_output,
+                    calibration_file_value,
+                )
             )
-        )
+        actions = pointpillars_actions + actions
     return actions
 
 def generate_launch_description():
@@ -242,6 +293,7 @@ def generate_launch_description():
     lidar_topic = LaunchConfiguration('lidar_topic')
     fusion_calibration_file = LaunchConfiguration('fusion_calibration_file')
     lidar_backend = LaunchConfiguration('lidar_backend')
+    lidar_verifier = LaunchConfiguration('lidar_verifier')
     
     # ==========================================
     # 1. 配置 2D YOLO 节点
@@ -312,6 +364,11 @@ def generate_launch_description():
             default_value='pointpillars',
             description='LiDAR cone detector backend: pointpillars, cluster, or auto.'
         ),
+        DeclareLaunchArgument(
+            'lidar_verifier',
+            default_value='true',
+            description='Enable local geometric, camera, and temporal verification for PointPillars output.'
+        ),
 
         # 1. 启动 YOLO
         yolo_node,
@@ -324,6 +381,8 @@ def generate_launch_description():
                 'health_metrics': health_metrics,
                 'lidar_topic': lidar_topic,
                 'lidar_backend': lidar_backend,
+                'lidar_verifier': lidar_verifier,
+                'fusion_calibration_file': fusion_calibration_file,
             },
         ),
         

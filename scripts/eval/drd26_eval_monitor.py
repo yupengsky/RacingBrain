@@ -294,6 +294,7 @@ class EvalMonitor(Node):
         self.create_subscription(NavPath, "/vehicle_path", self.cb_path, 10)
         self.create_subscription(String, "/perception/yolo/evaluation/metrics", self.cb_yolo_metrics, 10)
         self.create_subscription(String, "/perception/lidar/evaluation/metrics", self.cb_lidar_metrics, 10)
+        self.create_subscription(String, "/perception/lidar/pointpillars/verifier/metrics", self.cb_lidar_verifier_metrics, 10)
         self.create_subscription(String, "/perception/fusion/evaluation/metrics", self.cb_fusion_metrics, 10)
         self.create_subscription(String, "/slam/evaluation/metrics", self.cb_mapping_debug, 10)
         self.create_subscription(String, "/racingbrain/health/system", self.cb_system_health, 10)
@@ -539,6 +540,9 @@ class EvalMonitor(Node):
 
     def cb_lidar_metrics(self, msg: String) -> None:
         self.record_timing_metrics(msg, "/perception/lidar/evaluation/metrics", "lidar_cluster")
+
+    def cb_lidar_verifier_metrics(self, msg: String) -> None:
+        self.record_timing_metrics(msg, "/perception/lidar/pointpillars/verifier/metrics", "pointpillars_local_verifier")
 
     def cb_fusion_metrics(self, msg: String) -> None:
         self.record_timing_metrics(msg, "/perception/fusion/evaluation/metrics", "fusion")

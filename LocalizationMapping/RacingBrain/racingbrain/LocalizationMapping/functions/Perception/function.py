@@ -16,7 +16,17 @@ def _enabled(context, value):
     return _perform(context, value).strip().lower() in ("1", "true", "yes", "on")
 
 
-def _setup(context, eval_debug, health_metrics, camera_topic, lidar_topic, fusion_calibration_file, lidar_backend, enabled):
+def _setup(
+    context,
+    eval_debug,
+    health_metrics,
+    camera_topic,
+    lidar_topic,
+    fusion_calibration_file,
+    lidar_backend,
+    lidar_verifier,
+    enabled,
+):
     if not _enabled(context, enabled):
         return []
 
@@ -26,6 +36,7 @@ def _setup(context, eval_debug, health_metrics, camera_topic, lidar_topic, fusio
         "camera_topic": camera_topic,
         "lidar_topic": lidar_topic,
         "lidar_backend": lidar_backend,
+        "lidar_verifier": lidar_verifier,
     }
     calibration_value = _perform(context, fusion_calibration_file).strip()
     if calibration_value:
@@ -47,6 +58,7 @@ def launch_actions(
     lidar_topic=None,
     fusion_calibration_file=None,
     lidar_backend=None,
+    lidar_verifier=None,
     enabled=None,
 ):
     eval_debug = eval_debug or LaunchConfiguration("eval_debug")
@@ -55,6 +67,7 @@ def launch_actions(
     lidar_topic = lidar_topic or LaunchConfiguration("lidar_topic")
     fusion_calibration_file = fusion_calibration_file or LaunchConfiguration("fusion_calibration_file")
     lidar_backend = lidar_backend or LaunchConfiguration("lidar_backend")
+    lidar_verifier = lidar_verifier or LaunchConfiguration("lidar_verifier")
 
     return [
         OpaqueFunction(
@@ -66,6 +79,7 @@ def launch_actions(
                 "lidar_topic": lidar_topic,
                 "fusion_calibration_file": fusion_calibration_file,
                 "lidar_backend": lidar_backend,
+                "lidar_verifier": lidar_verifier,
                 "enabled": enabled,
             },
         )

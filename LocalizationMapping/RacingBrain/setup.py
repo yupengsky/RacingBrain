@@ -26,6 +26,7 @@ setup(
             "racingbrain = racingbrain.cli:main",
             "system_health_monitor = racingbrain.health.monitor:main",
             "lidar_backend_arbiter = racingbrain.perception.lidar_backend_arbiter:main",
+            "pointpillars_local_verifier = racingbrain.perception.pointpillars_local_verifier:main",
             "track_graph_builder = racingbrain.planning.track_graph_node:main",
         ],
     },

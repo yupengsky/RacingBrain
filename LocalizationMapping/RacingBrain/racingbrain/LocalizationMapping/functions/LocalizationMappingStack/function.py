@@ -19,6 +19,7 @@ def launch_actions(
     gnss_topic,
     fusion_calibration_file,
     lidar_backend,
+    lidar_verifier,
     mapping_gate,
     track,
     rviz,
@@ -34,6 +35,7 @@ def launch_actions(
             lidar_topic=lidar_topic,
             fusion_calibration_file=fusion_calibration_file,
             lidar_backend=lidar_backend,
+            lidar_verifier=lidar_verifier,
             enabled=enable_perception,
         )
     )
