@@ -1,0 +1,70 @@
+simple_PID_controller_node:
+  ros__parameters:
+    control_time_step: 0.05
+    # PID控制器参数
+    lateral_KP: 0.9
+    lateral_KI: 0.0
+    lateral_KD: 0.0
+    longitudinal_KP: 0.05
+    longitudinal_KI: 0.0
+    longitudinal_KD: 0.0
+    # 限制
+    min_accepted_wp_num: 2
+    max_angle_error: 100.0
+    max_angle_derivative: 150.0
+    max_steer_diff: 1.5
+    # 目标速度
+    target_speed: 4.16667
+
+PID_controller_node_cpp:
+  ros__parameters:
+    control_time_step: 0.005
+    lateral_K_PP: 0.08
+    lateral_C_PP: 0.12
+    lateral_I_PP: 0.0
+    lateral_D_PP: 0.0
+    longitudinal_KP: 0.05
+    longitudinal_KI: 0.0
+    longitudinal_KD: 0.0
+    target_speed: 5.0
+
+planner_node:
+  ros__parameters:
+    waypointsPublishInterval: 0.2
+    # RRT
+    frontConesDist: 15.0  # 桩筒搜索范围
+    coneObstacleSize: 1.1  # 桩筒障碍物大小
+    coneTargetsDistRatio: 0.5  # 目标桩筒范围比例
+    iterationNumber: 150  # 最大迭代次数
+    planDistance: 15.0  # 目标规划距离
+    frontConesBiggerDist: 20.0  # 桩筒前视范围
+    behindDist: 0.5  # 车辆后方距离
+    expandDistance: 1.0  # 树枝扩展距离
+    expandAngle: 20.0  # 树枝扩展角度
+    maxTargetAroundDist: 3.0  # 目标桩筒周围采样范围
+    nearSearchRatio: 3.0  # RRT重选父节点与重连的搜索范围与扩展距离的比例
+    # 左右桩筒判断
+    nearRatio: 0.4  # 桩筒距离比例
+    maxAngleDiff: 30.0  # 最大角度差
+    # 评分函数
+    coneDistLimit: 4.0  # 桩筒距离限制(一般可设置为赛道宽度)
+    correctColorReward: 1.0  # 颜色正确奖励
+    yawChangepenaltyFactor: 1.0  # 角度变化惩罚
+    # 平滑路径
+    everyPointDistChangeLimit: 2.0  # 每个路径点的距离变化限制
+    newPointFilter: 0.2  # 新路径点的滤波因子
+    resetCount: 2  # 重置计数
+    # Delaunay
+    maxAcceptedEdgeLength: 7.0  # 最大接受边长
+    maxEdgePartsRatio: 3.0  # 交点分割边长最大比例
+    maxSideDiffFactor: 0.8  # 左右桩筒数量差异系数
+    maxwpAngleDiff: 50.0  # 路径点角度差异
+    # 合并路径
+    maxDistToSaveWaypoints: 2.0  # 最大保存路径点距离
+    maxWaypointAmountToSave: 2  # 最大保存路径点数量
+    waypointsDistTolerance: 0.5  # 路径点距离容差
+    minDisttoPublish: 3.0  # 最小发布距离
+    minWpNum: 3  # 最小发布路径点数量
+    # loopClosure
+    loopPreliminaryCloseureTolerance: 1.0  # 初步闭环容差
+    loopCloseureTolerance: 3.0  # 闭环容差

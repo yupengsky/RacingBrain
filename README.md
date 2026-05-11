@@ -45,6 +45,8 @@ polluting the global map.
 - Replay fault injection and reliability benchmarks for degraded sensor experiments.
 - Dataset replay smoke tests with topic-level success summaries.
 - Small function folders for perception, mapping, health, planning, and full-stack bringup.
+- Optional planning-control stack under [`control/`](control/), including path
+  planning, C++/Python PID controllers, and a RacingBrain map/odom adapter.
 - One public launch surface for the real-time localization and mapping stack.
 
 ## Research Spine

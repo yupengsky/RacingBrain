@@ -1,0 +1,85 @@
+simple_PID_controller_node:
+  ros__parameters:
+    control_time_step: 0.05
+    # PID控制器参数
+    lateral_KP: 0.9
+    lateral_KI: 0.0
+    lateral_KD: 0.0
+    longitudinal_KP: 0.05
+    longitudinal_KI: 0.0
+    longitudinal_KD: 0.0
+    # 限制
+    min_accepted_wp_num: 2
+    max_angle_error: 100.0
+    max_angle_derivative: 150.0
+    max_steer_diff: 1.5
+    # 目标速度
+    target_speed: 5.0
+
+PID_controller_node_cpp:
+  ros__parameters:
+    control_time_step: 0.005
+    lateral_K_PP: 0.08
+    lateral_C_PP: 0.12
+    lateral_I_PP: 0.0
+    lateral_D_PP: 0.0
+    longitudinal_KP: 0.05
+    longitudinal_KI: 0.0
+    longitudinal_KD: 0.0
+    target_speed: 5.0
+    
+planner_node:
+  ros__parameters:
+    waypointsPublishInterval: 0.2  # 发布路径点时间间隔
+    # RRT
+    frontConesDist: 15.0  # 桩筒搜索范围
+    coneObstacleSize: 1.1  # 桩筒障碍物大小
+    coneTargetsDistRatio: 0.5  # 目标桩筒范围比例
+    iterationNumber: 150  # 最大迭代次数
+    planDistance: 15.0  # 目标规划距离
+    frontConesBiggerDist: 20.0  # 桩筒前视范围
+    behindDist: 0.5  # 车辆后方距离
+    expandDistance: 1.0  # 树枝扩展距离
+    expandAngle: 20.0  # 树枝扩展角度
+    maxTargetAroundDist: 3.0  # 目标桩筒周围采样范围
+    nearSearchRatio: 3.0  # RRT重选父节点与重连的搜索范围与扩展距离的比例
+    # 左右桩筒判断
+    nearRatio: 0.4  # 桩筒距离比例
+    maxAngleDiff: 30.0  # 最大角度差
+    middle_track_half_width: 1.8  # 赛道出入口半宽度
+    # 评分函数
+    coneDistLimit: 4.0  # 桩筒距离限制(一般可设置为赛道宽度)
+    correctColorReward: 1.0  # 颜色正确奖励
+    yawChangepenaltyFactor: 1.0  # 角度变化惩罚
+    # 平滑路径
+    everyPointDistChangeLimit: 2.0  # 每个路径点的距离变化限制
+    newPointFilter: 0.2  # 新路径点的滤波因子
+    resetCount: 2  # 重置计数
+    # Delaunay
+    maxAcceptedEdgeLength: 6.0  # 最大接受边长
+    maxEdgePartsRatio: 3.0  # 交点分割边长最大比例
+    maxSideDiffFactor: 0.8  # 左右桩筒数量差异系数
+    maxwpAngleDiff: 50.0  # 路径点角度差异
+    # 合并路径
+    maxDistToSaveWaypoints: 2.0  # 最大保存路径点距离
+    maxWaypointAmountToSave: 2  # 最大保存路径点数量
+    # 8字相关
+    middle_cones_max_distance: 20.0  # 中心桩筒距离自车起始位置的最大距离
+    travel_distance_before_start: 4.0  # 车辆行驶一定距离后开始计算赛道中心点(防止赛道起点桩筒的干扰)
+    distance_before_start: 1.5  # 从开始状态进入第一个右圈时，车辆距离赛道中心点的距离
+    distance_first_right_to_second_right: 1.3  # 从第一个右圈进入第二个右圈时，车辆距离赛道中心点的距离
+    distance_second_right_to_first_left: 2.5  # 从第二个右圈进入第一个左圈时，车辆距离赛道中心点的距离
+    distance_first_left_to_second_left: 1.3  # 从第一个左圈进入第二个左圈时，车辆距离赛道中心点的距离
+    distance_ending: 1.3  # 从第二个左圈结束到终点时，车辆距离赛道中心点的距离
+    forward_guidance_dist: 15  # 在开始和结束阶段的前视引导距离
+    delay_count: 30  # 第二个右圈开始后延迟多少个规划步，再开始判断是否进入第一个左圈
+    ending_count: 10  # 结束阶段规划次数
+    # 圆拟合
+    target_radius: 8.  # 目标半径
+    saved_circle_points_num_before_fitting: 40  # 拟合前保存的路径点数量
+    fit_num_iterations: 5  # 拟合迭代次数
+    fit_error_threshold: 0.5  # 拟合误差阈值
+    fit_n_pts: 30  # 拟合随机选择的点数量
+    total_fitted_circle_points: 60  # 拟合后保存的路径点数量
+    radius_change_factor: 0.2  # 半径变化因子
+    pub_wp_num: 20  # 发布的路径点数量

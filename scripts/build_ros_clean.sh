@@ -111,6 +111,16 @@ DEFAULT_BASE_PATHS=(
   "LocalizationMapping/RacingBrain"
 )
 
+if [[ "${INCLUDE_CONTROL_STACK:-false}" == "true" ]]; then
+  DEFAULT_BASE_PATHS+=(
+    "control/src/racing_control_adapters"
+    "control/src/path_planner"
+    "control/src/cpp_controller"
+    "control/src/simple_pid_controller"
+    "control/src/racing_control_bringup"
+  )
+fi
+
 COLCON_ARGS=("$@")
 HAS_BASE_PATHS=0
 for arg in "${COLCON_ARGS[@]}"; do

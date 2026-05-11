@@ -196,7 +196,7 @@ MAPPING_GATE=true \
 - `paired_boundary_count`
 - `centerline_count`
 
-当前 planning 是保守接口，不是完整高速控制器。论文表述应写成 planning-facing representation。
+当前 RacingBrain 原生 planning 是保守接口；`control/src` 已新增规划控制层，但需要单独做 FSDS 或真实车闭环验证。论文表述应区分 planning-facing representation 和 closed-loop control。
 
 ## 8. 汇总生成 Paper Tables
 
@@ -259,4 +259,3 @@ planning: true for final replay only
 - 高速闭环控制已经完成。
 
 这些需要 reference map、真实车闭环和控制实验补齐。
-
