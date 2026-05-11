@@ -342,6 +342,27 @@ It explains the current insight chain, the paper-driven ideas behind the
 reliability modules, and the next experiments that would make this project
 stronger for intelligent racing and embodied autonomous systems.
 
+For paper-style packaging and reproducible benchmark tables, see:
+
+- [`docs/paper_summary.md`](docs/paper_summary.md): representative-work framing,
+  contribution map, and thesis roadmap.
+- [`docs/literature_landscape.md`](docs/literature_landscape.md): 2023-2026
+  anchors for autonomous racing, planning-oriented autonomy, online map
+  uncertainty, and risk-aware planning.
+- [`docs/benchmark_runbook.md`](docs/benchmark_runbook.md): replay, fault
+  injection, ablation, and table-generation commands.
+- [`docs/metrics_schema.md`](docs/metrics_schema.md): metric definitions for
+  runtime, fusion consistency, map pollution, task risk, and planning readiness.
+
+Generate paper-facing tables from existing logs with:
+
+```bash
+python3 scripts/eval/summarize_benchmarks.py \
+  --input-root log/eval \
+  --benchmark-root log/benchmark \
+  --output-dir log/benchmark/benchmark_summary_latest
+```
+
 ## Recent Literature Hooks
 
 These recent papers are especially relevant to the current direction:

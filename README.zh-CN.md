@@ -232,6 +232,10 @@ ros2 launch racingbrain localization_mapping.launch.py \
 更偏研究表达的文档入口在：
 
 - [`LocalizationMapping/doc/research_report.md`](LocalizationMapping/doc/research_report.md)
+- [`docs/paper_summary.md`](docs/paper_summary.md)：博士代表作式包装、贡献图谱和路线图。
+- [`docs/literature_landscape.md`](docs/literature_landscape.md)：2023-2026 年无人赛车、planning-oriented autonomy、在线地图不确定性和风险感知规划锚点。
+- [`docs/benchmark_runbook.md`](docs/benchmark_runbook.md)：回放、故障注入、消融和表格生成命令。
+- [`docs/metrics_schema.md`](docs/metrics_schema.md)：实时性、融合一致性、地图污染、任务风险和规划可用性指标定义。
 
 这里面已经开始整理：
 
@@ -239,3 +243,12 @@ ros2 launch racingbrain localization_mapping.launch.py \
 - 文献到工程的映射；
 - 当前证据；
 - 下一步更像论文/更像博士工作的升级方向。
+
+从现有日志生成论文/汇报表格：
+
+```bash
+python3 scripts/eval/summarize_benchmarks.py \
+  --input-root log/eval \
+  --benchmark-root log/benchmark \
+  --output-dir log/benchmark/benchmark_summary_latest
+```
