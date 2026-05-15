@@ -28,8 +28,9 @@
 #include <pcl/common/centroid.h>
 #include <pcl/search/kdtree.h>
 
-// CSF
-#include <CSF.h> 
+#if HAVE_CSF
+#include <CSF.h>
+#endif
 #include <vector>
 #include <Eigen/Dense>
 

@@ -72,6 +72,9 @@ if [[ -d "${LOCAL_ROS_DEPS_PREFIX}" ]]; then
   export AMENT_PREFIX_PATH="${LOCAL_ROS_DEPS_PREFIX}${AMENT_PREFIX_PATH:+:${AMENT_PREFIX_PATH}}"
   export CMAKE_PREFIX_PATH="${LOCAL_ROS_DEPS_PREFIX}${CMAKE_PREFIX_PATH:+:${CMAKE_PREFIX_PATH}}"
   export LD_LIBRARY_PATH="${LOCAL_ROS_DEPS_PREFIX}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+  if [[ -d "${LOCAL_ROS_DEPS_PREFIX}/lib/x86_64-linux-gnu" ]]; then
+    export LD_LIBRARY_PATH="${LOCAL_ROS_DEPS_PREFIX}/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+  fi
   export PYTHONPATH="${LOCAL_ROS_DEPS_PREFIX}/local/lib/python3.10/dist-packages${PYTHONPATH:+:${PYTHONPATH}}"
 fi
 
@@ -110,6 +113,16 @@ DEFAULT_BASE_PATHS=(
   "LocalizationMapping/PointPillars/trt_cone_detector"
   "LocalizationMapping/RacingBrain"
 )
+
+if [[ "${INCLUDE_CONTROL_STACK:-false}" == "true" ]]; then
+  DEFAULT_BASE_PATHS+=(
+    "control/src/racing_control_adapters"
+    "control/src/path_planner"
+    "control/src/cpp_controller"
+    "control/src/simple_pid_controller"
+    "control/src/racing_control_bringup"
+  )
+fi
 
 COLCON_ARGS=("$@")
 HAS_BASE_PATHS=0

@@ -2,7 +2,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
-from racingbrain.LocalizationMapping.functions.LocalizationMappingStack.function import launch_actions
+from racingbrain.functions.localization_mapping_stack.function import launch_actions
 
 
 def generate_launch_description():
@@ -19,9 +19,11 @@ def generate_launch_description():
     fusion_calibration_file = LaunchConfiguration("fusion_calibration_file")
     lidar_backend = LaunchConfiguration("lidar_backend")
     lidar_verifier = LaunchConfiguration("lidar_verifier")
+    fusion_mode = LaunchConfiguration("fusion_mode")
     mapping_gate = LaunchConfiguration("mapping_gate")
     track = LaunchConfiguration("track")
     rviz = LaunchConfiguration("rviz")
+    health_expected_perception = LaunchConfiguration("health_expected_perception")
 
     return LaunchDescription(
         [
@@ -38,9 +40,11 @@ def generate_launch_description():
             DeclareLaunchArgument("fusion_calibration_file", default_value="", description="Optional override for the fusion calibration YAML file."),
             DeclareLaunchArgument("lidar_backend", default_value="pointpillars", description="LiDAR backend: pointpillars, cluster, or auto."),
             DeclareLaunchArgument("lidar_verifier", default_value="true", description="Enable local verification for PointPillars output."),
+            DeclareLaunchArgument("fusion_mode", default_value="camera_lidar", description="Fusion path: camera_lidar or lidar_only."),
             DeclareLaunchArgument("mapping_gate", default_value="true", description="Enable risk-aware mapping gate."),
             DeclareLaunchArgument("track", default_value="acceleration", description="Track config: acceleration, autocross, or skidpad."),
             DeclareLaunchArgument("rviz", default_value="true", description="Launch RViz with mapping."),
+            DeclareLaunchArgument("health_expected_perception", default_value="true", description="Whether health monitor should expect full perception metrics."),
             *launch_actions(
                 enable_perception=enable_perception,
                 enable_mapping=enable_mapping,
@@ -55,9 +59,11 @@ def generate_launch_description():
                 fusion_calibration_file=fusion_calibration_file,
                 lidar_backend=lidar_backend,
                 lidar_verifier=lidar_verifier,
+                fusion_mode=fusion_mode,
                 mapping_gate=mapping_gate,
                 track=track,
                 rviz=rviz,
+                health_expected_perception=health_expected_perception,
             ),
         ]
     )

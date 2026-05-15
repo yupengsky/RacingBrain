@@ -1,0 +1,102 @@
+{
+  "sample_count": 5176,
+  "duration_sec": 518.123005,
+  "processed_clouds": 5176,
+  "skipped_clouds": 0,
+  "icp_used_count": 5175,
+  "icp_used_ratio": 1.0,
+  "position_error_m": {
+    "mean": 6.375544,
+    "median": 3.8194,
+    "p95": 18.4789,
+    "max": 20.4489,
+    "rmse": 8.822537
+  },
+  "yaw_error_rad": {
+    "mean": 0.055423,
+    "median": 0.06764,
+    "p95": 0.091171,
+    "max": 0.103485,
+    "rmse": 0.064344
+  },
+  "gnss_accuracy_horizon_m": {
+    "mean": 0.015987,
+    "median": 0.015259,
+    "p95": 0.018311,
+    "max": 0.033569,
+    "rmse": 0.016154
+  },
+  "gnss_accuracy_yaw_deg": {
+    "mean": 0.307182,
+    "median": 0.334167,
+    "p95": 0.471497,
+    "max": 0.511169,
+    "rmse": 0.331007
+  },
+  "gnss_ins_status_counts": {
+    "2": 51835
+  },
+  "gnss_status_counts": {
+    "8": 51835
+  },
+  "satellite_main": {
+    "mean": 26.994174,
+    "median": 27.0,
+    "p95": 30.0,
+    "max": 33.0,
+    "rmse": 27.07429
+  },
+  "satellite_sub": {
+    "mean": 20.443503,
+    "median": 21.0,
+    "p95": 25.0,
+    "max": 27.0,
+    "rmse": 20.745081
+  },
+  "local_map_points": {
+    "mean": 19920.153237,
+    "median": 18420.0,
+    "p95": 37497.0,
+    "max": 45312.0,
+    "rmse": 22342.354698
+  },
+  "method": {
+    "name": "simple_offline_lio_scan_to_local_map",
+    "gnss_ins_usage": "GNSS/INS initializes the first LIO pose/yaw and is then used only for synchronization and final error evaluation.",
+    "imu_usage": "IMU z angular rate predicts inter-scan yaw before LiDAR ICP.",
+    "lidar_usage": "Non-ground LiDAR points are downsampled and matched against a recent local map with 3D nearest-neighbor, SE(2) point-to-point ICP."
+  },
+  "config": {
+    "lidar_min_range_m": 2.0,
+    "lidar_max_range_m": 90.0,
+    "z_min_m": -0.5,
+    "z_max_m": 4.0,
+    "icp_z_weight": 0.7,
+    "scan_voxel_m": 0.35,
+    "map_voxel_m": 0.35,
+    "max_scan_points": 6500,
+    "max_keyframe_points": 4500,
+    "local_map_keyframes": 35,
+    "keyframe_dist_m": 0.45,
+    "keyframe_yaw_rad": 0.08,
+    "keyframe_time_sec": 1.2,
+    "icp_iterations": 10,
+    "icp_max_correspondence_m": 2.0,
+    "icp_trim_fraction": 0.82,
+    "icp_min_inliers": 80,
+    "icp_max_rmse_m": 1.5,
+    "icp_max_translation_step_m": 0.45,
+    "icp_max_yaw_step_rad": 0.08,
+    "icp_max_pose_correction_m": 0.55,
+    "icp_max_pose_correction_yaw_rad": 0.06,
+    "imu_gyro_scale": 0.04348764102608839,
+    "max_frame_dt_sec": 0.35,
+    "max_speed_mps": 4.0,
+    "max_yaw_rate_radps": 1.0,
+    "sparse_scan_points": 1200,
+    "sparse_icp_weight": 0.25,
+    "velocity_update_alpha": 0.45,
+    "sparse_velocity_update_alpha": 0.05
+  },
+  "runtime_sec": 478.426
+}

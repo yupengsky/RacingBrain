@@ -85,6 +85,14 @@ void ConeSegmentationNode::setup_parameters()
     
     // 读取参数
     cfg_.use_csf = this->get_parameter("use_csf").as_bool();
+#if !HAVE_CSF
+    if (cfg_.use_csf) {
+        RCLCPP_WARN(
+            this->get_logger(),
+            "CSF support is not compiled in; falling back to RANSAC ground segmentation.");
+        cfg_.use_csf = false;
+    }
+#endif
     
     cfg_.ground_ransac_dist_threshold = this->get_parameter("ground_ransac_dist_threshold").as_double();
     cfg_.ground_ransac_max_iterations = this->get_parameter("ground_ransac_max_iterations").as_int();
@@ -232,6 +240,7 @@ void ConeSegmentationNode::process_pointcloud(const sensor_msgs::msg::PointCloud
     const auto ground_start = SteadyClock::now();
     if (cfg_.use_csf) 
     {
+#if HAVE_CSF
         // === 模式 A: CSF ===
         std::vector<csf::Point> csf_cloud;
         for (const auto& pt : cloud_filtered->points) {
@@ -267,6 +276,9 @@ void ConeSegmentationNode::process_pointcloud(const sensor_msgs::msg::PointCloud
             extract.setIndices(ground_indices_ptr);
             extract.filter(*cloud_ground);
         }
+#else
+        *cloud_obstacles = *cloud_filtered;
+#endif
     } 
     else 
     {

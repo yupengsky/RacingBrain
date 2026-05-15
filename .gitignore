@@ -40,6 +40,20 @@ compile_commands.json
 /tmp.zip
 /ref.pdf
 
+# Non-executable planning, report, and presentation material
+/README*.md
+!/README.md
+**/README.md
+**/README.zh-CN.md
+/docs/
+/assets/
+/ppt/
+/LocalizationMapping/doc/
+/LocalizationMapping/agent/
+*.doc
+*.docx
+/工作介绍.md
+
 # Imported perception workspace noise and large local assets
 /LocalizationMapping/perception/src/cone_ws/.git/
 /LocalizationMapping/perception/src/cone_ws/.venv/

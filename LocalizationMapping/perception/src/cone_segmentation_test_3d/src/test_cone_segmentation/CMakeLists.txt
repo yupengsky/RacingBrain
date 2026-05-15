@@ -61,17 +61,18 @@ find_library(CSF_LIBRARY
     "${CMAKE_SOURCE_DIR}/.ros_deps/csf/lib"
 )
 
-if(NOT CSF_INCLUDE_DIR OR NOT CSF_LIBRARY)
-  message(FATAL_ERROR "CSF not found. Set CSF_ROOT to a CSF install prefix, e.g. .ros_deps/csf")
+if(CSF_INCLUDE_DIR AND CSF_LIBRARY)
+  set(HAVE_CSF 1)
+  message(STATUS "CSF include: ${CSF_INCLUDE_DIR}")
+  message(STATUS "CSF library: ${CSF_LIBRARY}")
+else()
+  set(HAVE_CSF 0)
+  message(WARNING "CSF not found. Building cone segmentation with RANSAC-only ground removal.")
 endif()
-
-message(STATUS "CSF include: ${CSF_INCLUDE_DIR}")
-message(STATUS "CSF library: ${CSF_LIBRARY}")
 
 include_directories(
   include
   ${PCL_INCLUDE_DIRS}
-  ${CSF_INCLUDE_DIR}
 )
 
 # ==========================================
@@ -80,6 +81,11 @@ include_directories(
 add_executable(cone_segmentation_node
   src/test_cone_segmentation.cpp
 )
+
+target_compile_definitions(cone_segmentation_node PRIVATE HAVE_CSF=${HAVE_CSF})
+if(HAVE_CSF)
+  target_include_directories(cone_segmentation_node PRIVATE ${CSF_INCLUDE_DIR})
+endif()
 
 ament_target_dependencies(cone_segmentation_node
   rclcpp
@@ -96,9 +102,11 @@ ament_target_dependencies(cone_segmentation_node
 
 target_link_libraries(cone_segmentation_node
   ${PCL_LIBRARIES}
-  ${CSF_LIBRARY}
   OpenMP::OpenMP_CXX
 )
+if(HAVE_CSF)
+  target_link_libraries(cone_segmentation_node ${CSF_LIBRARY})
+endif()
 
 # ==========================================
 # [新增] 4. 确保节点能找到生成的消息头文件
