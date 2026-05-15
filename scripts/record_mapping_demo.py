@@ -10,13 +10,18 @@ import rclpy
 from cv_bridge import CvBridge
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, PointCloud2
 from visualization_msgs.msg import Marker, MarkerArray
 
 from cone_interfaces.msg import ConeArray
 from drd25_msgs.msg import Map
 from gnss_ins_msg.msg import Gnssins64
 from test_cone_segmentation.msg import ThreeDConeArray
+
+try:
+    from sensor_msgs_py import point_cloud2
+except ImportError:
+    point_cloud2 = None
 
 
 class MappingDemoRecorder(Node):
@@ -33,6 +38,7 @@ class MappingDemoRecorder(Node):
         self.frame_index = 0
 
         self.latest_debug_image = None
+        self.latest_point_cloud = None
         self.latest_yolo = None
         self.latest_lidar = None
         self.latest_fusion = None
@@ -49,6 +55,7 @@ class MappingDemoRecorder(Node):
             raise RuntimeError(f"Failed to open output video: {output_path}")
 
         self.create_subscription(Image, "/yolo/debug_image", self.cb_debug_image, 10)
+        self.create_subscription(PointCloud2, "/lidar_points", self.cb_point_cloud, 10)
         self.create_subscription(ConeArray, "/yolo/cones", self.cb_yolo, 10)
         self.create_subscription(ThreeDConeArray, "/cone_detection_custom", self.cb_lidar, 10)
         self.create_subscription(Map, "/perception/fusion/map", self.cb_fusion, 10)
@@ -64,6 +71,23 @@ class MappingDemoRecorder(Node):
 
     def cb_debug_image(self, msg: Image) -> None:
         self.latest_debug_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+        self.touch()
+
+    def cb_point_cloud(self, msg: PointCloud2) -> None:
+        if point_cloud2 is None:
+            return
+        points = []
+        for index, point in enumerate(point_cloud2.read_points(msg, field_names=("x", "y", "z"), skip_nans=True)):
+            if index % 8 != 0:
+                continue
+            try:
+                x, y, z = float(point[0]), float(point[1]), float(point[2])
+            except (IndexError, TypeError, ValueError):
+                x, y, z = float(point["x"]), float(point["y"]), float(point["z"])
+            points.append((x, y, z))
+            if len(points) >= 4500:
+                break
+        self.latest_point_cloud = np.asarray(points, dtype=np.float32)
         self.touch()
 
     def cb_yolo(self, msg: ConeArray) -> None:
@@ -139,13 +163,45 @@ class MappingDemoRecorder(Node):
 
     def draw_debug_panel(self, panel: np.ndarray) -> None:
         panel[:] = 255
-        cv2.putText(panel, "YOLO debug image", (10, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.72, (80, 80, 80), 2, cv2.LINE_AA)
         if self.latest_debug_image is None:
-            cv2.putText(panel, "waiting for /yolo/debug_image", (55, 240), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (120, 120, 120), 2, cv2.LINE_AA)
+            cv2.putText(panel, "LiDAR point cloud", (10, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.72, (80, 80, 80), 2, cv2.LINE_AA)
+            if self.latest_point_cloud is None or len(self.latest_point_cloud) == 0:
+                cv2.putText(panel, "waiting for /lidar_points", (55, 240), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (120, 120, 120), 2, cv2.LINE_AA)
+                return
+            self.draw_point_cloud_panel(panel)
             return
 
+        cv2.putText(panel, "YOLO debug image", (10, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.72, (80, 80, 80), 2, cv2.LINE_AA)
         image = self.fit_into(self.latest_debug_image, panel.shape[1], panel.shape[0] - 32)
         panel[32:32 + image.shape[0], 0:image.shape[1]] = image
+
+    def draw_point_cloud_panel(self, panel: np.ndarray) -> None:
+        h, w = panel.shape[:2]
+        origin = (w // 2, h - 38)
+        scale = 13.5
+
+        for x_m in range(0, 31, 5):
+            y_px = int(origin[1] - x_m * scale)
+            cv2.line(panel, (0, y_px), (w, y_px), (238, 238, 238), 1)
+            cv2.putText(panel, f"{x_m}m", (8, y_px - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (130, 130, 130), 1, cv2.LINE_AA)
+        for y_m in range(-15, 16, 5):
+            x_px = int(origin[0] - y_m * scale)
+            cv2.line(panel, (x_px, 32), (x_px, h), (238, 238, 238), 1)
+        cv2.line(panel, (origin[0], 32), (origin[0], h), (185, 185, 185), 1)
+        cv2.arrowedLine(panel, origin, (origin[0], max(36, origin[1] - 90)), (70, 70, 70), 2)
+        cv2.putText(panel, "forward", (origin[0] + 8, max(52, origin[1] - 94)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (80, 80, 80), 1, cv2.LINE_AA)
+
+        points = self.latest_point_cloud
+        if points is None:
+            return
+        for x, y, z in points:
+            if x < 0.0 or x > 30.0 or abs(y) > 15.0 or z < -2.5 or z > 3.5:
+                continue
+            px = int(origin[0] - y * scale)
+            py = int(origin[1] - x * scale)
+            if 0 <= px < w and 32 <= py < h:
+                shade = int(np.clip(135 + z * 32, 75, 210))
+                panel[py, px] = (shade, shade, shade)
 
     def draw_global_panel(self, panel: np.ndarray) -> None:
         panel[:] = 255

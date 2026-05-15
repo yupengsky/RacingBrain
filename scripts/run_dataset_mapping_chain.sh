@@ -39,6 +39,38 @@ if [[ ! -d "${DATASET_DIR}" ]]; then
   exit 1
 fi
 
+metadata_file="${DATASET_DIR}/metadata.yaml"
+bag_has_camera=false
+if [[ -f "${metadata_file}" ]] && grep -qE "name: /camera[0-9]*/image_raw|name: /camera1/image_raw" "${metadata_file}"; then
+  bag_has_camera=true
+fi
+
+FUSION_MODE="${FUSION_MODE:-auto}"
+if [[ "${FUSION_MODE}" == "auto" ]]; then
+  if [[ "${bag_has_camera}" == "true" ]]; then
+    FUSION_MODE="camera_lidar"
+  else
+    FUSION_MODE="lidar_only"
+  fi
+fi
+
+if [[ -z "${HEALTH_EXPECTED_PERCEPTION+x}" ]]; then
+  if [[ "${FUSION_MODE}" == "lidar_only" ]]; then
+    HEALTH_EXPECTED_PERCEPTION=false
+  else
+    HEALTH_EXPECTED_PERCEPTION=true
+  fi
+fi
+
+if [[ -z "${BAG_TOPICS+x}" ]]; then
+  if [[ "${FUSION_MODE}" == "lidar_only" ]]; then
+    BAG_TOPICS="/lidar_points /gongji_gnss_ins_64 /imu"
+  else
+    BAG_TOPICS="/camera1/image_raw /lidar_points /gongji_gnss_ins_64"
+  fi
+fi
+read -r -a BAG_TOPIC_ARGS <<< "${BAG_TOPICS}"
+
 if [[ "${LIDAR_BACKEND}" == "pointpillars" ]] && \
    ! ros2 pkg executables trt_cone_detector | awk '{print $2}' | grep -qx "trt_infer_node"; then
   echo "PointPillars backend selected, but trt_infer_node is not installed." >&2
@@ -74,7 +106,10 @@ echo "Dataset: ${DATASET_DIR}"
 echo "ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}"
 echo "Bag rate: ${BAG_RATE}"
 echo "LiDAR backend: ${LIDAR_BACKEND}"
+echo "Fusion mode: ${FUSION_MODE}"
+echo "Health expects full perception: ${HEALTH_EXPECTED_PERCEPTION}"
 echo "Mapping gate: ${MAPPING_GATE}"
+echo "Bag topics: ${BAG_TOPICS}"
 echo "Keep running after success: ${KEEP_RUNNING}"
 echo "Logs: ${LOG_DIR}"
 
@@ -82,7 +117,9 @@ ros2 launch racingbrain localization_mapping.launch.py \
   "track:=${TRACK}" \
   "rviz:=${RVIZ}" \
   "lidar_backend:=${LIDAR_BACKEND}" \
+  "fusion_mode:=${FUSION_MODE}" \
   "mapping_gate:=${MAPPING_GATE}" \
+  "health_expected_perception:=${HEALTH_EXPECTED_PERCEPTION}" \
   "enable_planning:=false" \
   "enable_health:=true" \
   >"${LOG_DIR}/stack.log" 2>&1 &
@@ -92,7 +129,7 @@ sleep "${STARTUP_WAIT}"
 
 ros2 bag play "${DATASET_DIR}" \
   --rate "${BAG_RATE}" \
-  --topics /camera1/image_raw /lidar_points /gongji_gnss_ins_64 \
+  --topics "${BAG_TOPIC_ARGS[@]}" \
   >"${LOG_DIR}/bag.log" 2>&1 &
 BAG_PID=$!
 

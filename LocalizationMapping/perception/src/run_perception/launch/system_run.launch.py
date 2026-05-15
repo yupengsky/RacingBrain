@@ -4,6 +4,7 @@ from configparser import ConfigParser
 from pathlib import Path
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, TimerAction
+from launch.conditions import LaunchConfigurationEquals
 from launch.substitutions import LaunchConfiguration
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
@@ -294,6 +295,7 @@ def generate_launch_description():
     fusion_calibration_file = LaunchConfiguration('fusion_calibration_file')
     lidar_backend = LaunchConfiguration('lidar_backend')
     lidar_verifier = LaunchConfiguration('lidar_verifier')
+    fusion_mode = LaunchConfiguration('fusion_mode')
     
     # ==========================================
     # 1. 配置 2D YOLO 节点
@@ -310,6 +312,7 @@ def generate_launch_description():
         executable='yolo_detector',    # 可执行文件名
         name='yolo_detector',
         output='screen',
+        condition=LaunchConfigurationEquals('fusion_mode', 'camera_lidar'),
         parameters=[{
             'model_path': model_path,
             'image_topic': camera_topic,
@@ -318,16 +321,6 @@ def generate_launch_description():
             'evaluation.enable_debug_metrics': ParameterValue(eval_debug, value_type=bool),
             'runtime_health.enable_metrics': ParameterValue(health_metrics, value_type=bool),
         }]
-    )
-
-    # ==========================================
-    # 3. 配置 融合节点 (引用已安装的 fs_fusion_box)
-    # ==========================================
-    # 只要 fs_fusion_box 编译并 source 过，这里就能找到
-    default_fusion_calibration = os.path.join(
-        get_package_share_directory('fs_fusion_box'),
-        'config',
-        'calibration.yaml'
     )
 
     # ==========================================
@@ -356,7 +349,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'fusion_calibration_file',
-            default_value=default_fusion_calibration,
+            default_value='',
             description='Optional override for the fusion calibration YAML file.'
         ),
         DeclareLaunchArgument(
@@ -368,6 +361,11 @@ def generate_launch_description():
             'lidar_verifier',
             default_value='true',
             description='Enable local geometric, camera, and temporal verification for PointPillars output.'
+        ),
+        DeclareLaunchArgument(
+            'fusion_mode',
+            default_value='camera_lidar',
+            description='Fusion path: camera_lidar or lidar_only.'
         ),
 
         # 1. 启动 YOLO
@@ -389,6 +387,7 @@ def generate_launch_description():
         # 3. 延迟 2 秒启动融合 (等待传感器节点就绪)
         TimerAction(
             period=2.0,
+            condition=LaunchConfigurationEquals('fusion_mode', 'camera_lidar'),
             actions=[
                 OpaqueFunction(
                     function=build_fusion_launch,
@@ -399,5 +398,21 @@ def generate_launch_description():
                     },
                 )
             ],
-        )
+        ),
+
+        Node(
+            package='racingbrain',
+            executable='lidar_cones_to_map',
+            name='lidar_cones_to_map',
+            output='screen',
+            condition=LaunchConfigurationEquals('fusion_mode', 'lidar_only'),
+            parameters=[{
+                'input_topic': '/cone_detection_custom',
+                'output_topic': '/perception/fusion/map',
+                'metrics_topic': '/perception/fusion/evaluation/metrics',
+                'color_policy': 'y_sign',
+                'max_range_m': 30.0,
+                'max_abs_y_m': 12.0,
+            }],
+        ),
     ])
