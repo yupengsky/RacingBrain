@@ -49,7 +49,7 @@ def make_cloud(points):
     return msg
 
 
-def test_adapter_outputs_lio_sam_velodyne_layout():
+def test_adapter_outputs_velodyne_layout():
     adapter = VelodynePointCloudAdapter(output_frame_id="lidar_link")
     msg = make_cloud(
         [

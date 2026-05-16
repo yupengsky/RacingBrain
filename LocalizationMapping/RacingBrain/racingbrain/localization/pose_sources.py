@@ -207,7 +207,7 @@ class MultiSourcePoseJudge:
         qualities = {"gnss_ins": gnss_q, "lio": lio_q_raw}
 
         self._maybe_initialize_or_update_alignment(now, gnss_q, lio_q_raw)
-        lio_aligned = self._aligned_lio_sample()
+        lio_aligned = self._aligned_lio_source()
         lio_q = self._quality("lio", lio_aligned, now)
         qualities["lio"] = lio_q
 
@@ -392,7 +392,7 @@ class MultiSourcePoseJudge:
         self.alignment.tx = (1.0 - alpha) * self.alignment.tx + alpha * tx
         self.alignment.ty = (1.0 - alpha) * self.alignment.ty + alpha * ty
 
-    def _aligned_lio_sample(self) -> Optional[SourceSample]:
+    def _aligned_lio_source(self) -> Optional[SourceSample]:
         if self.lio_raw is None or self.alignment is None:
             return None
         return SourceSample(

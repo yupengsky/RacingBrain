@@ -40,7 +40,7 @@ def run_lio_eval(args):
         "racingbrain",
         "lio_dataset_eval.launch.py",
         {
-            "run_lio_sam": _bool_text(args.run_lio_sam),
+            "run_simple_lio": _bool_text(args.run_simple_lio),
             "run_pointcloud_adapter": _bool_text(args.pointcloud_adapter),
             "run_imu_adapter": _bool_text(args.imu_adapter),
             "run_error_eval": _bool_text(args.error_eval),
@@ -51,10 +51,10 @@ def run_lio_eval(args):
             "imu_topic": args.imu_topic,
             "lio_odom_topic": args.lio_odom_topic,
             "output_dir": args.output_dir,
-            "lio_params_file": args.lio_params_file,
             "lidar_frame": args.lidar_frame,
             "n_scan": args.n_scan,
             "scan_period_sec": args.scan_period_sec,
+            "imu_gyro_scale": args.imu_gyro_scale,
         },
     )
 
@@ -83,7 +83,7 @@ def add_mapping_args(parser):
 
 
 def add_lio_eval_args(parser):
-    parser.add_argument("--no-run-lio-sam", dest="run_lio_sam", action="store_false")
+    parser.add_argument("--no-run-simple-lio", dest="run_simple_lio", action="store_false")
     parser.add_argument("--no-pointcloud-adapter", dest="pointcloud_adapter", action="store_false")
     parser.add_argument("--no-imu-adapter", dest="imu_adapter", action="store_false")
     parser.add_argument("--no-error-eval", dest="error_eval", action="store_false")
@@ -92,13 +92,13 @@ def add_lio_eval_args(parser):
     parser.add_argument("--gnss-topic", default="/gongji_gnss_ins_64")
     parser.add_argument("--input-imu-topic", default="/imu")
     parser.add_argument("--imu-topic", default="/imu_lio")
-    parser.add_argument("--lio-odom-topic", default="/lio_sam/mapping/odometry")
+    parser.add_argument("--lio-odom-topic", default="/racingbrain/simple_lio/odometry")
     parser.add_argument("--output-dir", default="log/benchmark/lio_gnss/latest")
-    parser.add_argument("--lio-params-file", default=None)
-    parser.add_argument("--lidar-frame", default="lidar_link")
+    parser.add_argument("--lidar-frame", default="base_link")
     parser.add_argument("--n-scan", default="64")
     parser.add_argument("--scan-period-sec", default="0.1")
-    parser.set_defaults(run_lio_sam=True, pointcloud_adapter=True, imu_adapter=True, error_eval=True)
+    parser.add_argument("--imu-gyro-scale", default="0.04348764102608839")
+    parser.set_defaults(run_simple_lio=True, pointcloud_adapter=False, imu_adapter=False, error_eval=True)
 
 
 def main(argv=None):
@@ -109,7 +109,7 @@ def main(argv=None):
     add_mapping_args(mapping)
     mapping.set_defaults(func=run_mapping)
 
-    lio_eval = subparsers.add_parser("lio-eval", help="Run LIO-SAM input adapter and GNSS/LIO evaluator.")
+    lio_eval = subparsers.add_parser("lio-eval", help="Run Simple LIO and the GNSS/LIO evaluator.")
     add_lio_eval_args(lio_eval)
     lio_eval.set_defaults(func=run_lio_eval)
 

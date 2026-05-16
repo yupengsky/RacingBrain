@@ -1,6 +1,3 @@
-import os
-
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
@@ -10,14 +7,10 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory("racingbrain")
-    default_lio_params = os.path.join(pkg_share, "config", "lio_sam_racingbrain.yaml")
-
-    run_lio_sam = LaunchConfiguration("run_lio_sam")
+    run_simple_lio = LaunchConfiguration("run_simple_lio")
     run_pointcloud_adapter = LaunchConfiguration("run_pointcloud_adapter")
     run_imu_adapter = LaunchConfiguration("run_imu_adapter")
     run_error_eval = LaunchConfiguration("run_error_eval")
-    lio_params_file = LaunchConfiguration("lio_params_file")
     input_cloud_topic = LaunchConfiguration("input_cloud_topic")
     adapted_cloud_topic = LaunchConfiguration("adapted_cloud_topic")
     lidar_frame = LaunchConfiguration("lidar_frame")
@@ -28,26 +21,27 @@ def generate_launch_description():
     output_dir = LaunchConfiguration("output_dir")
     scan_period_sec = LaunchConfiguration("scan_period_sec")
     n_scan = LaunchConfiguration("n_scan")
+    imu_gyro_scale = LaunchConfiguration("imu_gyro_scale")
     position_warn_m = LaunchConfiguration("position_warn_m")
     yaw_warn_rad = LaunchConfiguration("yaw_warn_rad")
 
     return LaunchDescription(
         [
-            DeclareLaunchArgument("run_lio_sam", default_value="true"),
-            DeclareLaunchArgument("run_pointcloud_adapter", default_value="true"),
-            DeclareLaunchArgument("run_imu_adapter", default_value="true"),
+            DeclareLaunchArgument("run_simple_lio", default_value="true"),
+            DeclareLaunchArgument("run_pointcloud_adapter", default_value="false"),
+            DeclareLaunchArgument("run_imu_adapter", default_value="false"),
             DeclareLaunchArgument("run_error_eval", default_value="true"),
-            DeclareLaunchArgument("lio_params_file", default_value=default_lio_params),
             DeclareLaunchArgument("input_cloud_topic", default_value="/lidar_points"),
             DeclareLaunchArgument("adapted_cloud_topic", default_value="/points"),
             DeclareLaunchArgument("lidar_frame", default_value="base_link"),
             DeclareLaunchArgument("gnss_topic", default_value="/gongji_gnss_ins_64"),
             DeclareLaunchArgument("input_imu_topic", default_value="/imu"),
             DeclareLaunchArgument("imu_topic", default_value="/imu_lio"),
-            DeclareLaunchArgument("lio_odom_topic", default_value="/lio_sam/mapping/odometry"),
+            DeclareLaunchArgument("lio_odom_topic", default_value="/racingbrain/simple_lio/odometry"),
             DeclareLaunchArgument("output_dir", default_value="log/benchmark/lio_gnss/latest"),
             DeclareLaunchArgument("scan_period_sec", default_value="0.1"),
             DeclareLaunchArgument("n_scan", default_value="64"),
+            DeclareLaunchArgument("imu_gyro_scale", default_value="0.04348764102608839"),
             DeclareLaunchArgument("position_warn_m", default_value="1.0"),
             DeclareLaunchArgument("yaw_warn_rad", default_value="0.25"),
             Node(
@@ -80,50 +74,21 @@ def generate_launch_description():
                 ],
             ),
             Node(
-                package="tf2_ros",
-                executable="static_transform_publisher",
-                name="lio_sam_map_to_odom_tf",
-                arguments=["0", "0", "0", "0", "0", "0", "map", "odom"],
-                condition=IfCondition(run_lio_sam),
-            ),
-            Node(
-                package="lio_sam",
-                executable="lio_sam_imuPreintegration",
-                name="lio_sam_imuPreintegration",
-                parameters=[lio_params_file, {"imuTopic": imu_topic}],
-                output="screen",
-                condition=IfCondition(run_lio_sam),
-            ),
-            Node(
-                package="lio_sam",
-                executable="lio_sam_imageProjection",
-                name="lio_sam_imageProjection",
+                package="racingbrain",
+                executable="simple_lio",
+                name="simple_lio",
                 parameters=[
-                    lio_params_file,
                     {
-                        "pointCloudTopic": adapted_cloud_topic,
-                        "imuTopic": imu_topic,
-                        "lidarFrame": lidar_frame,
-                    },
+                        "cloud_topic": input_cloud_topic,
+                        "imu_topic": input_imu_topic,
+                        "gnss_topic": gnss_topic,
+                        "odom_topic": lio_odom_topic,
+                        "base_frame": lidar_frame,
+                        "imu_gyro_scale": ParameterValue(imu_gyro_scale, value_type=float),
+                    }
                 ],
                 output="screen",
-                condition=IfCondition(run_lio_sam),
-            ),
-            Node(
-                package="lio_sam",
-                executable="lio_sam_featureExtraction",
-                name="lio_sam_featureExtraction",
-                parameters=[lio_params_file],
-                output="screen",
-                condition=IfCondition(run_lio_sam),
-            ),
-            Node(
-                package="lio_sam",
-                executable="lio_sam_mapOptimization",
-                name="lio_sam_mapOptimization",
-                parameters=[lio_params_file],
-                output="screen",
-                condition=IfCondition(run_lio_sam),
+                condition=IfCondition(run_simple_lio),
             ),
             Node(
                 package="racingbrain",

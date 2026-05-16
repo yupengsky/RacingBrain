@@ -24,7 +24,7 @@ class LioGnssErrorEvalNode(Node):
     def __init__(self) -> None:
         super().__init__("lio_gnss_error_eval")
         self.declare_parameter("gnss_topic", "/gongji_gnss_ins_64")
-        self.declare_parameter("lio_odom_topic", "/lio_sam/mapping/odometry")
+        self.declare_parameter("lio_odom_topic", "/racingbrain/simple_lio/odometry")
         self.declare_parameter("diagnostics_topic", "/racingbrain/localization/lio_gnss_error")
         self.declare_parameter("output_dir", "log/benchmark/lio_gnss/latest")
         self.declare_parameter("sync_tolerance_sec", 0.08)
@@ -125,7 +125,7 @@ class LioGnssErrorEvalNode(Node):
             encoding="utf-8",
         )
         lines = [
-            "# LIO-SAM vs GNSS/INS Evaluation",
+            "# Simple LIO vs GNSS/INS Evaluation",
             "",
             f"- Samples: `{summary['sample_count']}`",
             f"- Alignment mode: `{summary['alignment_mode']}`",

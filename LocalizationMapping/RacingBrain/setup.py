@@ -32,6 +32,7 @@ setup(
             "lio_imu_adapter = racingbrain.localization.lio_imu_adapter_node:main",
             "lio_pointcloud_adapter = racingbrain.localization.lio_pointcloud_adapter_node:main",
             "multisource_pose_judge = racingbrain.localization.multisource_pose_judge_node:main",
+            "simple_lio = racingbrain.localization.simple_lio_node:main",
             "pointpillars_local_verifier = racingbrain.perception.pointpillars_local_verifier:main",
             "track_graph_builder = racingbrain.planning.track_graph_node:main",
         ],

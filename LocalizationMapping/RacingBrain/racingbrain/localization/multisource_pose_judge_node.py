@@ -84,7 +84,7 @@ class MultiSourcePoseJudgeNode(Node):
         super().__init__("multisource_pose_judge")
 
         self.declare_parameter("gnss_topic", "/gongji_gnss_ins_64")
-        self.declare_parameter("lio_odom_topic", "/lio_sam/mapping/odometry")
+        self.declare_parameter("lio_odom_topic", "/racingbrain/simple_lio/odometry")
         self.declare_parameter("output_odom_topic", "/racingbrain/localization/pose")
         self.declare_parameter("output_gnss_topic", "/racingbrain/localization/gnss_ins_pose")
         self.declare_parameter("diagnostics_topic", "/racingbrain/localization/pose_judge")
