@@ -1,0 +1,1756 @@
+{
+  "generated_at": "2026-05-16 14:01:07",
+  "dataset_dir": "/media/yupeng/Ventoy/rosbag2_2026_05_10-15_02_50",
+  "scenario_mode": "severity_grid",
+  "default_scenario_id": "1_gaps_5s",
+  "scenario_options": [
+    {
+      "id": "1_gaps_5s",
+      "label": "1 gap x 5s",
+      "outage_count": 1,
+      "segment_duration_sec": 5.0,
+      "outage_total_duration_sec": 5.0,
+      "fallback_rmse_m": 0.058284
+    },
+    {
+      "id": "1_gaps_10s",
+      "label": "1 gap x 10s",
+      "outage_count": 1,
+      "segment_duration_sec": 10.0,
+      "outage_total_duration_sec": 10.0,
+      "fallback_rmse_m": 0.192735
+    },
+    {
+      "id": "5_gaps_5s",
+      "label": "5 gaps x 5s",
+      "outage_count": 5,
+      "segment_duration_sec": 5.0,
+      "outage_total_duration_sec": 25.0,
+      "fallback_rmse_m": 0.255718
+    },
+    {
+      "id": "5_gaps_10s",
+      "label": "5 gaps x 10s",
+      "outage_count": 5,
+      "segment_duration_sec": 10.0,
+      "outage_total_duration_sec": 50.0,
+      "fallback_rmse_m": 0.36749
+    },
+    {
+      "id": "10_gaps_5s",
+      "label": "10 gaps x 5s",
+      "outage_count": 10,
+      "segment_duration_sec": 5.0,
+      "outage_total_duration_sec": 50.0,
+      "fallback_rmse_m": 0.136201
+    },
+    {
+      "id": "10_gaps_10s",
+      "label": "10 gaps x 10s",
+      "outage_count": 10,
+      "segment_duration_sec": 10.0,
+      "outage_total_duration_sec": 100.0,
+      "fallback_rmse_m": 0.261909
+    }
+  ],
+  "scenarios": {
+    "1_gaps_5s": {
+      "scenario_id": "1_gaps_5s",
+      "scenario_label": "1 gap x 5s",
+      "segment_duration_sec": 5.0,
+      "sample_count": 5176,
+      "duration_sec": 518.123005,
+      "processed_clouds": 5176,
+      "skipped_clouds": 0,
+      "source_counts": {
+        "gnss_ins": 5126,
+        "lio_fallback": 50
+      },
+      "outage_count": 1,
+      "outage_total_duration_sec": 5.0,
+      "fallback_sample_count": 50,
+      "fallback_icp_used_count": 49,
+      "fallback_icp_used_ratio": 1.0,
+      "position_error_m": {
+        "mean": 0.000501,
+        "median": 0.0,
+        "p95": 0.0,
+        "max": 0.0975,
+        "rmse": 0.005728
+      },
+      "fallback_position_error_m": {
+        "mean": 0.05185,
+        "median": 0.0516,
+        "p95": 0.0957,
+        "max": 0.0975,
+        "rmse": 0.058284
+      },
+      "available_position_error_m": {
+        "mean": 0.0,
+        "median": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "rmse": 0.0
+      },
+      "yaw_error_rad": {
+        "mean": 1.3e-05,
+        "median": 0.0,
+        "p95": 0.0,
+        "max": 0.001989,
+        "rmse": 0.000139
+      },
+      "fallback_yaw_error_rad": {
+        "mean": 0.00137,
+        "median": 0.001408,
+        "p95": 0.001858,
+        "max": 0.001989,
+        "rmse": 0.001418
+      },
+      "fallback_scan_points": {
+        "mean": 5505.34,
+        "median": 5659.0,
+        "p95": 6500.0,
+        "max": 6500.0,
+        "rmse": 5579.801339
+      },
+      "fallback_rmse_m": 0.058284,
+      "gnss_accuracy_horizon_m": {
+        "mean": 0.015987,
+        "median": 0.015259,
+        "p95": 0.018311,
+        "max": 0.033569,
+        "rmse": 0.016154
+      },
+      "gnss_accuracy_yaw_deg": {
+        "mean": 0.307182,
+        "median": 0.334167,
+        "p95": 0.471497,
+        "max": 0.511169,
+        "rmse": 0.331007
+      },
+      "gnss_ins_status_counts": {
+        "2": 51835
+      },
+      "gnss_status_counts": {
+        "8": 51835
+      },
+      "satellite_main": {
+        "mean": 26.994174,
+        "median": 27.0,
+        "p95": 30.0,
+        "max": 33.0,
+        "rmse": 27.07429
+      },
+      "satellite_sub": {
+        "mean": 20.443503,
+        "median": 21.0,
+        "p95": 25.0,
+        "max": 27.0,
+        "rmse": 20.745081
+      },
+      "outages": [
+        {
+          "outage_id": "gap_01",
+          "start_t": 256.628954,
+          "end_t": 261.628954,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.05185,
+            "median": 0.0516,
+            "p95": 0.0957,
+            "max": 0.0975,
+            "rmse": 0.058284
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        }
+      ],
+      "outage_initializations": [
+        {
+          "outage_id": "gap_01",
+          "outage_start_t": 256.628954,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778396827.65,
+          "anchor_t": 256.627908,
+          "anchor_x": 183.2206,
+          "anchor_y": -9.1727,
+          "anchor_yaw": -1.15758
+        }
+      ],
+      "method": {
+        "name": "gnss_ins_priority_with_simple_lio_outage_fallback",
+        "truth_definition": "The complete unmasked GNSS/INS trajectory is the ground-truth trajectory for all error metrics.",
+        "fusion_rule": "Fused pose equals GNSS/INS outside artificial outages and equals simple LIO fallback inside artificial outages.",
+        "fallback_rule": "Each outage starts a fresh simple LIO runtime initialized from the latest GNSS/INS pose before the outage; GNSS/INS truth is not injected during the outage.",
+        "lio_algorithm": "Reuses offline_simple_lio_eval.py scan filtering, IMU yaw prediction, local keyframe map, and SE(2) ICP parameters."
+      },
+      "config": {
+        "lidar_min_range_m": 2.0,
+        "lidar_max_range_m": 90.0,
+        "z_min_m": -0.5,
+        "z_max_m": 4.0,
+        "icp_z_weight": 0.7,
+        "scan_voxel_m": 0.35,
+        "map_voxel_m": 0.35,
+        "max_scan_points": 6500,
+        "max_keyframe_points": 4500,
+        "local_map_keyframes": 35,
+        "keyframe_dist_m": 0.45,
+        "keyframe_yaw_rad": 0.08,
+        "keyframe_time_sec": 1.2,
+        "icp_iterations": 10,
+        "icp_max_correspondence_m": 2.0,
+        "icp_trim_fraction": 0.82,
+        "icp_min_inliers": 80,
+        "icp_max_rmse_m": 1.5,
+        "icp_max_translation_step_m": 0.45,
+        "icp_max_yaw_step_rad": 0.08,
+        "icp_max_pose_correction_m": 0.55,
+        "icp_max_pose_correction_yaw_rad": 0.06,
+        "imu_gyro_scale": 0.04348764102608839,
+        "max_frame_dt_sec": 0.35,
+        "max_speed_mps": 4.0,
+        "max_yaw_rate_radps": 1.0,
+        "sparse_scan_points": 1200,
+        "sparse_icp_weight": 0.25,
+        "velocity_update_alpha": 0.45,
+        "sparse_velocity_update_alpha": 0.05
+      },
+      "runtime_sec": 224.246
+    },
+    "1_gaps_10s": {
+      "scenario_id": "1_gaps_10s",
+      "scenario_label": "1 gap x 10s",
+      "segment_duration_sec": 10.0,
+      "sample_count": 5176,
+      "duration_sec": 518.123005,
+      "processed_clouds": 5176,
+      "skipped_clouds": 0,
+      "source_counts": {
+        "gnss_ins": 5076,
+        "lio_fallback": 100
+      },
+      "outage_count": 1,
+      "outage_total_duration_sec": 10.0,
+      "fallback_sample_count": 100,
+      "fallback_icp_used_count": 99,
+      "fallback_icp_used_ratio": 1.0,
+      "position_error_m": {
+        "mean": 0.003271,
+        "median": 0.0,
+        "p95": 0.0,
+        "max": 0.3445,
+        "rmse": 0.026789
+      },
+      "fallback_position_error_m": {
+        "mean": 0.169324,
+        "median": 0.17065,
+        "p95": 0.325,
+        "max": 0.3445,
+        "rmse": 0.192735
+      },
+      "available_position_error_m": {
+        "mean": 0.0,
+        "median": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "rmse": 0.0
+      },
+      "yaw_error_rad": {
+        "mean": 0.000237,
+        "median": 0.0,
+        "p95": 0.0,
+        "max": 0.015007,
+        "rmse": 0.00178
+      },
+      "fallback_yaw_error_rad": {
+        "mean": 0.01228,
+        "median": 0.013949,
+        "p95": 0.014544,
+        "max": 0.015007,
+        "rmse": 0.012809
+      },
+      "fallback_scan_points": {
+        "mean": 5321.22,
+        "median": 5659.0,
+        "p95": 6500.0,
+        "max": 6500.0,
+        "rmse": 5449.112788
+      },
+      "fallback_rmse_m": 0.192735,
+      "gnss_accuracy_horizon_m": {
+        "mean": 0.015987,
+        "median": 0.015259,
+        "p95": 0.018311,
+        "max": 0.033569,
+        "rmse": 0.016154
+      },
+      "gnss_accuracy_yaw_deg": {
+        "mean": 0.307182,
+        "median": 0.334167,
+        "p95": 0.471497,
+        "max": 0.511169,
+        "rmse": 0.331007
+      },
+      "gnss_ins_status_counts": {
+        "2": 51835
+      },
+      "gnss_status_counts": {
+        "8": 51835
+      },
+      "satellite_main": {
+        "mean": 26.994174,
+        "median": 27.0,
+        "p95": 30.0,
+        "max": 33.0,
+        "rmse": 27.07429
+      },
+      "satellite_sub": {
+        "mean": 20.443503,
+        "median": 21.0,
+        "p95": 25.0,
+        "max": 27.0,
+        "rmse": 20.745081
+      },
+      "outages": [
+        {
+          "outage_id": "gap_01",
+          "start_t": 254.128954,
+          "end_t": 264.128954,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 100,
+          "position_error_m": {
+            "mean": 0.169324,
+            "median": 0.17065,
+            "p95": 0.325,
+            "max": 0.3445,
+            "rmse": 0.192735
+          },
+          "lio_processed_samples": 100,
+          "lio_icp_used_count": 99,
+          "lio_sparse_prediction_count": 0
+        }
+      ],
+      "outage_initializations": [
+        {
+          "outage_id": "gap_01",
+          "outage_start_t": 254.128954,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778396825.15,
+          "anchor_t": 254.127908,
+          "anchor_x": 182.0315,
+          "anchor_y": -5.8665,
+          "anchor_yaw": -1.122682
+        }
+      ],
+      "method": {
+        "name": "gnss_ins_priority_with_simple_lio_outage_fallback",
+        "truth_definition": "The complete unmasked GNSS/INS trajectory is the ground-truth trajectory for all error metrics.",
+        "fusion_rule": "Fused pose equals GNSS/INS outside artificial outages and equals simple LIO fallback inside artificial outages.",
+        "fallback_rule": "Each outage starts a fresh simple LIO runtime initialized from the latest GNSS/INS pose before the outage; GNSS/INS truth is not injected during the outage.",
+        "lio_algorithm": "Reuses offline_simple_lio_eval.py scan filtering, IMU yaw prediction, local keyframe map, and SE(2) ICP parameters."
+      },
+      "config": {
+        "lidar_min_range_m": 2.0,
+        "lidar_max_range_m": 90.0,
+        "z_min_m": -0.5,
+        "z_max_m": 4.0,
+        "icp_z_weight": 0.7,
+        "scan_voxel_m": 0.35,
+        "map_voxel_m": 0.35,
+        "max_scan_points": 6500,
+        "max_keyframe_points": 4500,
+        "local_map_keyframes": 35,
+        "keyframe_dist_m": 0.45,
+        "keyframe_yaw_rad": 0.08,
+        "keyframe_time_sec": 1.2,
+        "icp_iterations": 10,
+        "icp_max_correspondence_m": 2.0,
+        "icp_trim_fraction": 0.82,
+        "icp_min_inliers": 80,
+        "icp_max_rmse_m": 1.5,
+        "icp_max_translation_step_m": 0.45,
+        "icp_max_yaw_step_rad": 0.08,
+        "icp_max_pose_correction_m": 0.55,
+        "icp_max_pose_correction_yaw_rad": 0.06,
+        "imu_gyro_scale": 0.04348764102608839,
+        "max_frame_dt_sec": 0.35,
+        "max_speed_mps": 4.0,
+        "max_yaw_rate_radps": 1.0,
+        "sparse_scan_points": 1200,
+        "sparse_icp_weight": 0.25,
+        "velocity_update_alpha": 0.45,
+        "sparse_velocity_update_alpha": 0.05
+      },
+      "runtime_sec": 224.246
+    },
+    "5_gaps_5s": {
+      "scenario_id": "5_gaps_5s",
+      "scenario_label": "5 gaps x 5s",
+      "segment_duration_sec": 5.0,
+      "sample_count": 5176,
+      "duration_sec": 518.123005,
+      "processed_clouds": 5176,
+      "skipped_clouds": 0,
+      "source_counts": {
+        "gnss_ins": 4926,
+        "lio_fallback": 250
+      },
+      "outage_count": 5,
+      "outage_total_duration_sec": 25.0,
+      "fallback_sample_count": 250,
+      "fallback_icp_used_count": 245,
+      "fallback_icp_used_ratio": 1.0,
+      "position_error_m": {
+        "mean": 0.007809,
+        "median": 0.0,
+        "p95": 0.0,
+        "max": 0.8574,
+        "rmse": 0.0562
+      },
+      "fallback_position_error_m": {
+        "mean": 0.161667,
+        "median": 0.0883,
+        "p95": 0.7039,
+        "max": 0.8574,
+        "rmse": 0.255718
+      },
+      "available_position_error_m": {
+        "mean": 0.0,
+        "median": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "rmse": 0.0
+      },
+      "yaw_error_rad": {
+        "mean": 0.000187,
+        "median": 0.0,
+        "p95": 0.0,
+        "max": 0.028857,
+        "rmse": 0.001565
+      },
+      "fallback_yaw_error_rad": {
+        "mean": 0.003881,
+        "median": 0.001476,
+        "p95": 0.022278,
+        "max": 0.028857,
+        "rmse": 0.007121
+      },
+      "fallback_scan_points": {
+        "mean": 5328.86,
+        "median": 5659.0,
+        "p95": 6500.0,
+        "max": 6500.0,
+        "rmse": 5440.1758
+      },
+      "fallback_rmse_m": 0.255718,
+      "gnss_accuracy_horizon_m": {
+        "mean": 0.015987,
+        "median": 0.015259,
+        "p95": 0.018311,
+        "max": 0.033569,
+        "rmse": 0.016154
+      },
+      "gnss_accuracy_yaw_deg": {
+        "mean": 0.307182,
+        "median": 0.334167,
+        "p95": 0.471497,
+        "max": 0.511169,
+        "rmse": 0.331007
+      },
+      "gnss_ins_status_counts": {
+        "2": 51835
+      },
+      "gnss_status_counts": {
+        "8": 51835
+      },
+      "satellite_main": {
+        "mean": 26.994174,
+        "median": 27.0,
+        "p95": 30.0,
+        "max": 33.0,
+        "rmse": 27.07429
+      },
+      "satellite_sub": {
+        "mean": 20.443503,
+        "median": 21.0,
+        "p95": 25.0,
+        "max": 27.0,
+        "rmse": 20.745081
+      },
+      "outages": [
+        {
+          "outage_id": "gap_01",
+          "start_t": 41.460633,
+          "end_t": 46.460633,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.045828,
+            "median": 0.0394,
+            "p95": 0.092,
+            "max": 0.0938,
+            "rmse": 0.05218
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_02",
+          "start_t": 149.044793,
+          "end_t": 154.044793,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.142172,
+            "median": 0.13375,
+            "p95": 0.2862,
+            "max": 0.2914,
+            "rmse": 0.167947
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_03",
+          "start_t": 256.628954,
+          "end_t": 261.628954,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.05185,
+            "median": 0.0516,
+            "p95": 0.0957,
+            "max": 0.0975,
+            "rmse": 0.058284
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_04",
+          "start_t": 364.213115,
+          "end_t": 369.213115,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.455206,
+            "median": 0.47155,
+            "p95": 0.8454,
+            "max": 0.8574,
+            "rmse": 0.527358
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_05",
+          "start_t": 471.797275,
+          "end_t": 476.797275,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.11328,
+            "median": 0.1319,
+            "p95": 0.1434,
+            "max": 0.1438,
+            "rmse": 0.120528
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        }
+      ],
+      "outage_initializations": [
+        {
+          "outage_id": "gap_01",
+          "outage_start_t": 41.460633,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778396612.48,
+          "anchor_t": 41.457908,
+          "anchor_x": 34.7397,
+          "anchor_y": -6.8573,
+          "anchor_yaw": -0.24141
+        },
+        {
+          "outage_id": "gap_02",
+          "outage_start_t": 149.044793,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778396720.06,
+          "anchor_t": 149.037908,
+          "anchor_x": 176.7521,
+          "anchor_y": -41.5444,
+          "anchor_yaw": 0.158767
+        },
+        {
+          "outage_id": "gap_03",
+          "outage_start_t": 256.628954,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778396827.65,
+          "anchor_t": 256.627908,
+          "anchor_x": 183.2206,
+          "anchor_y": -9.1727,
+          "anchor_yaw": -1.15758
+        },
+        {
+          "outage_id": "gap_04",
+          "outage_start_t": 364.213115,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778396935.23,
+          "anchor_t": 364.207908,
+          "anchor_x": 97.7601,
+          "anchor_y": -2.9945,
+          "anchor_yaw": -2.997686
+        },
+        {
+          "outage_id": "gap_05",
+          "outage_start_t": 471.797275,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778397042.81,
+          "anchor_t": 471.787908,
+          "anchor_x": 13.5363,
+          "anchor_y": -2.4713,
+          "anchor_yaw": -0.12013
+        }
+      ],
+      "method": {
+        "name": "gnss_ins_priority_with_simple_lio_outage_fallback",
+        "truth_definition": "The complete unmasked GNSS/INS trajectory is the ground-truth trajectory for all error metrics.",
+        "fusion_rule": "Fused pose equals GNSS/INS outside artificial outages and equals simple LIO fallback inside artificial outages.",
+        "fallback_rule": "Each outage starts a fresh simple LIO runtime initialized from the latest GNSS/INS pose before the outage; GNSS/INS truth is not injected during the outage.",
+        "lio_algorithm": "Reuses offline_simple_lio_eval.py scan filtering, IMU yaw prediction, local keyframe map, and SE(2) ICP parameters."
+      },
+      "config": {
+        "lidar_min_range_m": 2.0,
+        "lidar_max_range_m": 90.0,
+        "z_min_m": -0.5,
+        "z_max_m": 4.0,
+        "icp_z_weight": 0.7,
+        "scan_voxel_m": 0.35,
+        "map_voxel_m": 0.35,
+        "max_scan_points": 6500,
+        "max_keyframe_points": 4500,
+        "local_map_keyframes": 35,
+        "keyframe_dist_m": 0.45,
+        "keyframe_yaw_rad": 0.08,
+        "keyframe_time_sec": 1.2,
+        "icp_iterations": 10,
+        "icp_max_correspondence_m": 2.0,
+        "icp_trim_fraction": 0.82,
+        "icp_min_inliers": 80,
+        "icp_max_rmse_m": 1.5,
+        "icp_max_translation_step_m": 0.45,
+        "icp_max_yaw_step_rad": 0.08,
+        "icp_max_pose_correction_m": 0.55,
+        "icp_max_pose_correction_yaw_rad": 0.06,
+        "imu_gyro_scale": 0.04348764102608839,
+        "max_frame_dt_sec": 0.35,
+        "max_speed_mps": 4.0,
+        "max_yaw_rate_radps": 1.0,
+        "sparse_scan_points": 1200,
+        "sparse_icp_weight": 0.25,
+        "velocity_update_alpha": 0.45,
+        "sparse_velocity_update_alpha": 0.05
+      },
+      "runtime_sec": 224.246
+    },
+    "5_gaps_10s": {
+      "scenario_id": "5_gaps_10s",
+      "scenario_label": "5 gaps x 10s",
+      "segment_duration_sec": 10.0,
+      "sample_count": 5176,
+      "duration_sec": 518.123005,
+      "processed_clouds": 5176,
+      "skipped_clouds": 0,
+      "source_counts": {
+        "gnss_ins": 4677,
+        "lio_fallback": 499
+      },
+      "outage_count": 5,
+      "outage_total_duration_sec": 50.0,
+      "fallback_sample_count": 499,
+      "fallback_icp_used_count": 494,
+      "fallback_icp_used_ratio": 1.0,
+      "position_error_m": {
+        "mean": 0.025935,
+        "median": 0.0,
+        "p95": 0.1762,
+        "max": 1.1403,
+        "rmse": 0.114103
+      },
+      "fallback_position_error_m": {
+        "mean": 0.269021,
+        "median": 0.1927,
+        "p95": 0.8726,
+        "max": 1.1403,
+        "rmse": 0.36749
+      },
+      "available_position_error_m": {
+        "mean": 0.0,
+        "median": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "rmse": 0.0
+      },
+      "yaw_error_rad": {
+        "mean": 0.000705,
+        "median": 0.0,
+        "p95": 0.006343,
+        "max": 0.02504,
+        "rmse": 0.002804
+      },
+      "fallback_yaw_error_rad": {
+        "mean": 0.00731,
+        "median": 0.006461,
+        "p95": 0.015007,
+        "max": 0.02504,
+        "rmse": 0.009032
+      },
+      "fallback_scan_points": {
+        "mean": 5076.098196,
+        "median": 4835.0,
+        "p95": 6500.0,
+        "max": 6500.0,
+        "rmse": 5203.327198
+      },
+      "fallback_rmse_m": 0.36749,
+      "gnss_accuracy_horizon_m": {
+        "mean": 0.015987,
+        "median": 0.015259,
+        "p95": 0.018311,
+        "max": 0.033569,
+        "rmse": 0.016154
+      },
+      "gnss_accuracy_yaw_deg": {
+        "mean": 0.307182,
+        "median": 0.334167,
+        "p95": 0.471497,
+        "max": 0.511169,
+        "rmse": 0.331007
+      },
+      "gnss_ins_status_counts": {
+        "2": 51835
+      },
+      "gnss_status_counts": {
+        "8": 51835
+      },
+      "satellite_main": {
+        "mean": 26.994174,
+        "median": 27.0,
+        "p95": 30.0,
+        "max": 33.0,
+        "rmse": 27.07429
+      },
+      "satellite_sub": {
+        "mean": 20.443503,
+        "median": 21.0,
+        "p95": 25.0,
+        "max": 27.0,
+        "rmse": 20.745081
+      },
+      "outages": [
+        {
+          "outage_id": "gap_01",
+          "start_t": 41.460633,
+          "end_t": 51.460633,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 99,
+          "position_error_m": {
+            "mean": 0.06929,
+            "median": 0.0786,
+            "p95": 0.1071,
+            "max": 0.1132,
+            "rmse": 0.075769
+          },
+          "lio_processed_samples": 99,
+          "lio_icp_used_count": 98,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_02",
+          "start_t": 147.794793,
+          "end_t": 157.794793,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 100,
+          "position_error_m": {
+            "mean": 0.254435,
+            "median": 0.2975,
+            "p95": 0.4389,
+            "max": 0.4532,
+            "rmse": 0.297608
+          },
+          "lio_processed_samples": 100,
+          "lio_icp_used_count": 99,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_03",
+          "start_t": 254.128954,
+          "end_t": 264.128954,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 100,
+          "position_error_m": {
+            "mean": 0.169324,
+            "median": 0.17065,
+            "p95": 0.325,
+            "max": 0.3445,
+            "rmse": 0.192735
+          },
+          "lio_processed_samples": 100,
+          "lio_icp_used_count": 99,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_04",
+          "start_t": 360.463115,
+          "end_t": 370.463115,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 100,
+          "position_error_m": {
+            "mean": 0.588828,
+            "median": 0.62715,
+            "p95": 1.0592,
+            "max": 1.1403,
+            "rmse": 0.674389
+          },
+          "lio_processed_samples": 100,
+          "lio_icp_used_count": 99,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_05",
+          "start_t": 466.797275,
+          "end_t": 476.797275,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 100,
+          "position_error_m": {
+            "mean": 0.26123,
+            "median": 0.33045,
+            "p95": 0.4075,
+            "max": 0.41,
+            "rmse": 0.29613
+          },
+          "lio_processed_samples": 100,
+          "lio_icp_used_count": 99,
+          "lio_sparse_prediction_count": 0
+        }
+      ],
+      "outage_initializations": [
+        {
+          "outage_id": "gap_01",
+          "outage_start_t": 41.460633,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778396612.48,
+          "anchor_t": 41.457908,
+          "anchor_x": 34.7397,
+          "anchor_y": -6.8573,
+          "anchor_yaw": -0.24141
+        },
+        {
+          "outage_id": "gap_02",
+          "outage_start_t": 147.794793,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778396718.81,
+          "anchor_t": 147.787908,
+          "anchor_x": 174.9827,
+          "anchor_y": -41.7671,
+          "anchor_yaw": 0.055511
+        },
+        {
+          "outage_id": "gap_03",
+          "outage_start_t": 254.128954,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778396825.15,
+          "anchor_t": 254.127908,
+          "anchor_x": 182.0315,
+          "anchor_y": -5.8665,
+          "anchor_yaw": -1.122682
+        },
+        {
+          "outage_id": "gap_04",
+          "outage_start_t": 360.463115,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778396931.48,
+          "anchor_t": 360.457908,
+          "anchor_x": 102.8969,
+          "anchor_y": -0.9128,
+          "anchor_yaw": -2.349963
+        },
+        {
+          "outage_id": "gap_05",
+          "outage_start_t": 466.797275,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778397037.81,
+          "anchor_t": 466.787908,
+          "anchor_x": 6.3734,
+          "anchor_y": -0.7236,
+          "anchor_yaw": -0.33575
+        }
+      ],
+      "method": {
+        "name": "gnss_ins_priority_with_simple_lio_outage_fallback",
+        "truth_definition": "The complete unmasked GNSS/INS trajectory is the ground-truth trajectory for all error metrics.",
+        "fusion_rule": "Fused pose equals GNSS/INS outside artificial outages and equals simple LIO fallback inside artificial outages.",
+        "fallback_rule": "Each outage starts a fresh simple LIO runtime initialized from the latest GNSS/INS pose before the outage; GNSS/INS truth is not injected during the outage.",
+        "lio_algorithm": "Reuses offline_simple_lio_eval.py scan filtering, IMU yaw prediction, local keyframe map, and SE(2) ICP parameters."
+      },
+      "config": {
+        "lidar_min_range_m": 2.0,
+        "lidar_max_range_m": 90.0,
+        "z_min_m": -0.5,
+        "z_max_m": 4.0,
+        "icp_z_weight": 0.7,
+        "scan_voxel_m": 0.35,
+        "map_voxel_m": 0.35,
+        "max_scan_points": 6500,
+        "max_keyframe_points": 4500,
+        "local_map_keyframes": 35,
+        "keyframe_dist_m": 0.45,
+        "keyframe_yaw_rad": 0.08,
+        "keyframe_time_sec": 1.2,
+        "icp_iterations": 10,
+        "icp_max_correspondence_m": 2.0,
+        "icp_trim_fraction": 0.82,
+        "icp_min_inliers": 80,
+        "icp_max_rmse_m": 1.5,
+        "icp_max_translation_step_m": 0.45,
+        "icp_max_yaw_step_rad": 0.08,
+        "icp_max_pose_correction_m": 0.55,
+        "icp_max_pose_correction_yaw_rad": 0.06,
+        "imu_gyro_scale": 0.04348764102608839,
+        "max_frame_dt_sec": 0.35,
+        "max_speed_mps": 4.0,
+        "max_yaw_rate_radps": 1.0,
+        "sparse_scan_points": 1200,
+        "sparse_icp_weight": 0.25,
+        "velocity_update_alpha": 0.45,
+        "sparse_velocity_update_alpha": 0.05
+      },
+      "runtime_sec": 224.246
+    },
+    "10_gaps_5s": {
+      "scenario_id": "10_gaps_5s",
+      "scenario_label": "10 gaps x 5s",
+      "segment_duration_sec": 5.0,
+      "sample_count": 5176,
+      "duration_sec": 518.123005,
+      "processed_clouds": 5176,
+      "skipped_clouds": 0,
+      "source_counts": {
+        "gnss_ins": 4676,
+        "lio_fallback": 500
+      },
+      "outage_count": 10,
+      "outage_total_duration_sec": 50.0,
+      "fallback_sample_count": 500,
+      "fallback_icp_used_count": 490,
+      "fallback_icp_used_ratio": 1.0,
+      "position_error_m": {
+        "mean": 0.010031,
+        "median": 0.0,
+        "p95": 0.0688,
+        "max": 0.4043,
+        "rmse": 0.042332
+      },
+      "fallback_position_error_m": {
+        "mean": 0.103841,
+        "median": 0.0714,
+        "p95": 0.2897,
+        "max": 0.4043,
+        "rmse": 0.136201
+      },
+      "available_position_error_m": {
+        "mean": 0.0,
+        "median": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "rmse": 0.0
+      },
+      "yaw_error_rad": {
+        "mean": 0.000297,
+        "median": 0.0,
+        "p95": 0.001394,
+        "max": 0.021105,
+        "rmse": 0.001758
+      },
+      "fallback_yaw_error_rad": {
+        "mean": 0.003078,
+        "median": 0.001439,
+        "p95": 0.017261,
+        "max": 0.021105,
+        "rmse": 0.005655
+      },
+      "fallback_scan_points": {
+        "mean": 4329.104,
+        "median": 4653.0,
+        "p95": 6500.0,
+        "max": 6500.0,
+        "rmse": 4761.453679
+      },
+      "fallback_rmse_m": 0.136201,
+      "gnss_accuracy_horizon_m": {
+        "mean": 0.015987,
+        "median": 0.015259,
+        "p95": 0.018311,
+        "max": 0.033569,
+        "rmse": 0.016154
+      },
+      "gnss_accuracy_yaw_deg": {
+        "mean": 0.307182,
+        "median": 0.334167,
+        "p95": 0.471497,
+        "max": 0.511169,
+        "rmse": 0.331007
+      },
+      "gnss_ins_status_counts": {
+        "2": 51835
+      },
+      "gnss_status_counts": {
+        "8": 51835
+      },
+      "satellite_main": {
+        "mean": 26.994174,
+        "median": 27.0,
+        "p95": 30.0,
+        "max": 33.0,
+        "rmse": 27.07429
+      },
+      "satellite_sub": {
+        "mean": 20.443503,
+        "median": 21.0,
+        "p95": 25.0,
+        "max": 27.0,
+        "rmse": 20.745081
+      },
+      "outages": [
+        {
+          "outage_id": "gap_01",
+          "start_t": 41.460633,
+          "end_t": 46.460633,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.045828,
+            "median": 0.0394,
+            "p95": 0.092,
+            "max": 0.0938,
+            "rmse": 0.05218
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_02",
+          "start_t": 89.275815,
+          "end_t": 94.275815,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.085164,
+            "median": 0.0721,
+            "p95": 0.2115,
+            "max": 0.2307,
+            "rmse": 0.102277
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_03",
+          "start_t": 137.090998,
+          "end_t": 142.090998,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.040462,
+            "median": 0.0378,
+            "p95": 0.0849,
+            "max": 0.0899,
+            "rmse": 0.045645
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_04",
+          "start_t": 184.90618,
+          "end_t": 189.90618,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.050296,
+            "median": 0.05385,
+            "p95": 0.0744,
+            "max": 0.0754,
+            "rmse": 0.053388
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_05",
+          "start_t": 232.721363,
+          "end_t": 237.721363,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.080786,
+            "median": 0.07515,
+            "p95": 0.1659,
+            "max": 0.1731,
+            "rmse": 0.091703
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_06",
+          "start_t": 280.536545,
+          "end_t": 285.536545,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.0293,
+            "median": 0.02905,
+            "p95": 0.0618,
+            "max": 0.0647,
+            "rmse": 0.033962
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_07",
+          "start_t": 328.351728,
+          "end_t": 333.351728,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.19802,
+            "median": 0.18855,
+            "p95": 0.3261,
+            "max": 0.3429,
+            "rmse": 0.217346
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_08",
+          "start_t": 376.16691,
+          "end_t": 381.16691,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.180626,
+            "median": 0.18395,
+            "p95": 0.2623,
+            "max": 0.2727,
+            "rmse": 0.191796
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_09",
+          "start_t": 423.982093,
+          "end_t": 428.982093,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.214648,
+            "median": 0.2404,
+            "p95": 0.3789,
+            "max": 0.4043,
+            "rmse": 0.243466
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_10",
+          "start_t": 471.797275,
+          "end_t": 476.797275,
+          "duration_sec": 5.0,
+          "fallback_sample_count": 50,
+          "position_error_m": {
+            "mean": 0.11328,
+            "median": 0.1319,
+            "p95": 0.1434,
+            "max": 0.1438,
+            "rmse": 0.120528
+          },
+          "lio_processed_samples": 50,
+          "lio_icp_used_count": 49,
+          "lio_sparse_prediction_count": 0
+        }
+      ],
+      "outage_initializations": [
+        {
+          "outage_id": "gap_01",
+          "outage_start_t": 41.460633,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778396612.48,
+          "anchor_t": 41.457908,
+          "anchor_x": 34.7397,
+          "anchor_y": -6.8573,
+          "anchor_yaw": -0.24141
+        },
+        {
+          "outage_id": "gap_02",
+          "outage_start_t": 89.275815,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778396660.29,
+          "anchor_t": 89.267908,
+          "anchor_x": 79.9907,
+          "anchor_y": -20.0598,
+          "anchor_yaw": -0.030584
+        },
+        {
+          "outage_id": "gap_03",
+          "outage_start_t": 137.090998,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778396708.11,
+          "anchor_t": 137.087908,
+          "anchor_x": 159.6581,
+          "anchor_y": -40.8988,
+          "anchor_yaw": -0.051005
+        },
+        {
+          "outage_id": "gap_04",
+          "outage_start_t": 184.90618,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778396755.92,
+          "anchor_t": 184.897908,
+          "anchor_x": 167.6581,
+          "anchor_y": -21.2843,
+          "anchor_yaw": -3.014752
+        },
+        {
+          "outage_id": "gap_05",
+          "outage_start_t": 232.721363,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778396803.74,
+          "anchor_t": 232.717908,
+          "anchor_x": 152.9137,
+          "anchor_y": -0.2449,
+          "anchor_yaw": 0.119842
+        },
+        {
+          "outage_id": "gap_06",
+          "outage_start_t": 280.536545,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778396851.55,
+          "anchor_t": 280.527908,
+          "anchor_x": 211.7201,
+          "anchor_y": -0.757,
+          "anchor_yaw": 1.470225
+        },
+        {
+          "outage_id": "gap_07",
+          "outage_start_t": 328.351728,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778396899.37,
+          "anchor_t": 328.347908,
+          "anchor_x": 149.1562,
+          "anchor_y": 12.8685,
+          "anchor_yaw": -3.080617
+        },
+        {
+          "outage_id": "gap_08",
+          "outage_start_t": 376.16691,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778396947.18,
+          "anchor_t": 376.157908,
+          "anchor_x": 87.6483,
+          "anchor_y": 9.0948,
+          "anchor_yaw": 1.820931
+        },
+        {
+          "outage_id": "gap_09",
+          "outage_start_t": 423.982093,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778396995.0,
+          "anchor_t": 423.977908,
+          "anchor_x": 20.5946,
+          "anchor_y": 14.6162,
+          "anchor_yaw": -2.983113
+        },
+        {
+          "outage_id": "gap_10",
+          "outage_start_t": 471.797275,
+          "outage_duration_sec": 5.0,
+          "anchor_stamp": 1778397042.81,
+          "anchor_t": 471.787908,
+          "anchor_x": 13.5363,
+          "anchor_y": -2.4713,
+          "anchor_yaw": -0.12013
+        }
+      ],
+      "method": {
+        "name": "gnss_ins_priority_with_simple_lio_outage_fallback",
+        "truth_definition": "The complete unmasked GNSS/INS trajectory is the ground-truth trajectory for all error metrics.",
+        "fusion_rule": "Fused pose equals GNSS/INS outside artificial outages and equals simple LIO fallback inside artificial outages.",
+        "fallback_rule": "Each outage starts a fresh simple LIO runtime initialized from the latest GNSS/INS pose before the outage; GNSS/INS truth is not injected during the outage.",
+        "lio_algorithm": "Reuses offline_simple_lio_eval.py scan filtering, IMU yaw prediction, local keyframe map, and SE(2) ICP parameters."
+      },
+      "config": {
+        "lidar_min_range_m": 2.0,
+        "lidar_max_range_m": 90.0,
+        "z_min_m": -0.5,
+        "z_max_m": 4.0,
+        "icp_z_weight": 0.7,
+        "scan_voxel_m": 0.35,
+        "map_voxel_m": 0.35,
+        "max_scan_points": 6500,
+        "max_keyframe_points": 4500,
+        "local_map_keyframes": 35,
+        "keyframe_dist_m": 0.45,
+        "keyframe_yaw_rad": 0.08,
+        "keyframe_time_sec": 1.2,
+        "icp_iterations": 10,
+        "icp_max_correspondence_m": 2.0,
+        "icp_trim_fraction": 0.82,
+        "icp_min_inliers": 80,
+        "icp_max_rmse_m": 1.5,
+        "icp_max_translation_step_m": 0.45,
+        "icp_max_yaw_step_rad": 0.08,
+        "icp_max_pose_correction_m": 0.55,
+        "icp_max_pose_correction_yaw_rad": 0.06,
+        "imu_gyro_scale": 0.04348764102608839,
+        "max_frame_dt_sec": 0.35,
+        "max_speed_mps": 4.0,
+        "max_yaw_rate_radps": 1.0,
+        "sparse_scan_points": 1200,
+        "sparse_icp_weight": 0.25,
+        "velocity_update_alpha": 0.45,
+        "sparse_velocity_update_alpha": 0.05
+      },
+      "runtime_sec": 224.246
+    },
+    "10_gaps_10s": {
+      "scenario_id": "10_gaps_10s",
+      "scenario_label": "10 gaps x 10s",
+      "segment_duration_sec": 10.0,
+      "sample_count": 5176,
+      "duration_sec": 518.123005,
+      "processed_clouds": 5176,
+      "skipped_clouds": 0,
+      "source_counts": {
+        "gnss_ins": 4178,
+        "lio_fallback": 998
+      },
+      "outage_count": 10,
+      "outage_total_duration_sec": 100.0,
+      "fallback_sample_count": 998,
+      "fallback_icp_used_count": 988,
+      "fallback_icp_used_ratio": 1.0,
+      "position_error_m": {
+        "mean": 0.03822,
+        "median": 0.0,
+        "p95": 0.3098,
+        "max": 0.7031,
+        "rmse": 0.115005
+      },
+      "fallback_position_error_m": {
+        "mean": 0.198224,
+        "median": 0.1417,
+        "p95": 0.576,
+        "max": 0.7031,
+        "rmse": 0.261909
+      },
+      "available_position_error_m": {
+        "mean": 0.0,
+        "median": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "rmse": 0.0
+      },
+      "yaw_error_rad": {
+        "mean": 0.000895,
+        "median": 0.0,
+        "p95": 0.006568,
+        "max": 0.022293,
+        "rmse": 0.002954
+      },
+      "fallback_yaw_error_rad": {
+        "mean": 0.00464,
+        "median": 0.003193,
+        "p95": 0.016152,
+        "max": 0.022293,
+        "rmse": 0.006727
+      },
+      "fallback_scan_points": {
+        "mean": 4370.822645,
+        "median": 4652.5,
+        "p95": 6500.0,
+        "max": 6500.0,
+        "rmse": 4770.191554
+      },
+      "fallback_rmse_m": 0.261909,
+      "gnss_accuracy_horizon_m": {
+        "mean": 0.015987,
+        "median": 0.015259,
+        "p95": 0.018311,
+        "max": 0.033569,
+        "rmse": 0.016154
+      },
+      "gnss_accuracy_yaw_deg": {
+        "mean": 0.307182,
+        "median": 0.334167,
+        "p95": 0.471497,
+        "max": 0.511169,
+        "rmse": 0.331007
+      },
+      "gnss_ins_status_counts": {
+        "2": 51835
+      },
+      "gnss_status_counts": {
+        "8": 51835
+      },
+      "satellite_main": {
+        "mean": 26.994174,
+        "median": 27.0,
+        "p95": 30.0,
+        "max": 33.0,
+        "rmse": 27.07429
+      },
+      "satellite_sub": {
+        "mean": 20.443503,
+        "median": 21.0,
+        "p95": 25.0,
+        "max": 27.0,
+        "rmse": 20.745081
+      },
+      "outages": [
+        {
+          "outage_id": "gap_01",
+          "start_t": 41.460633,
+          "end_t": 51.460633,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 99,
+          "position_error_m": {
+            "mean": 0.06929,
+            "median": 0.0786,
+            "p95": 0.1071,
+            "max": 0.1132,
+            "rmse": 0.075769
+          },
+          "lio_processed_samples": 99,
+          "lio_icp_used_count": 98,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_02",
+          "start_t": 88.72026,
+          "end_t": 98.72026,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 99,
+          "position_error_m": {
+            "mean": 0.134999,
+            "median": 0.1027,
+            "p95": 0.3608,
+            "max": 0.3674,
+            "rmse": 0.169399
+          },
+          "lio_processed_samples": 99,
+          "lio_icp_used_count": 98,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_03",
+          "start_t": 135.979887,
+          "end_t": 145.979887,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 100,
+          "position_error_m": {
+            "mean": 0.09725,
+            "median": 0.09015,
+            "p95": 0.1719,
+            "max": 0.1818,
+            "rmse": 0.110087
+          },
+          "lio_processed_samples": 100,
+          "lio_icp_used_count": 99,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_04",
+          "start_t": 183.239513,
+          "end_t": 193.239513,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 100,
+          "position_error_m": {
+            "mean": 0.141921,
+            "median": 0.1525,
+            "p95": 0.1946,
+            "max": 0.2017,
+            "rmse": 0.149664
+          },
+          "lio_processed_samples": 100,
+          "lio_icp_used_count": 99,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_05",
+          "start_t": 230.49914,
+          "end_t": 240.49914,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 100,
+          "position_error_m": {
+            "mean": 0.197325,
+            "median": 0.2012,
+            "p95": 0.3575,
+            "max": 0.3622,
+            "rmse": 0.229442
+          },
+          "lio_processed_samples": 100,
+          "lio_icp_used_count": 99,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_06",
+          "start_t": 277.758767,
+          "end_t": 287.758767,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 100,
+          "position_error_m": {
+            "mean": 0.050325,
+            "median": 0.0513,
+            "p95": 0.0897,
+            "max": 0.1098,
+            "rmse": 0.058052
+          },
+          "lio_processed_samples": 100,
+          "lio_icp_used_count": 99,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_07",
+          "start_t": 325.018394,
+          "end_t": 335.018394,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 100,
+          "position_error_m": {
+            "mean": 0.336403,
+            "median": 0.3463,
+            "p95": 0.6508,
+            "max": 0.7031,
+            "rmse": 0.384214
+          },
+          "lio_processed_samples": 100,
+          "lio_icp_used_count": 99,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_08",
+          "start_t": 372.278021,
+          "end_t": 382.278021,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 100,
+          "position_error_m": {
+            "mean": 0.365317,
+            "median": 0.4663,
+            "p95": 0.6164,
+            "max": 0.6309,
+            "rmse": 0.426396
+          },
+          "lio_processed_samples": 100,
+          "lio_icp_used_count": 99,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_09",
+          "start_t": 419.537648,
+          "end_t": 429.537648,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 100,
+          "position_error_m": {
+            "mean": 0.326261,
+            "median": 0.3176,
+            "p95": 0.6113,
+            "max": 0.6298,
+            "rmse": 0.377941
+          },
+          "lio_processed_samples": 100,
+          "lio_icp_used_count": 99,
+          "lio_sparse_prediction_count": 0
+        },
+        {
+          "outage_id": "gap_10",
+          "start_t": 466.797275,
+          "end_t": 476.797275,
+          "duration_sec": 10.0,
+          "fallback_sample_count": 100,
+          "position_error_m": {
+            "mean": 0.26123,
+            "median": 0.33045,
+            "p95": 0.4075,
+            "max": 0.41,
+            "rmse": 0.29613
+          },
+          "lio_processed_samples": 100,
+          "lio_icp_used_count": 99,
+          "lio_sparse_prediction_count": 0
+        }
+      ],
+      "outage_initializations": [
+        {
+          "outage_id": "gap_01",
+          "outage_start_t": 41.460633,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778396612.48,
+          "anchor_t": 41.457908,
+          "anchor_x": 34.7397,
+          "anchor_y": -6.8573,
+          "anchor_yaw": -0.24141
+        },
+        {
+          "outage_id": "gap_02",
+          "outage_start_t": 88.72026,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778396659.74,
+          "anchor_t": 88.717908,
+          "anchor_x": 79.0775,
+          "anchor_y": -20.0264,
+          "anchor_yaw": -0.020038
+        },
+        {
+          "outage_id": "gap_03",
+          "outage_start_t": 135.979887,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778396707.0,
+          "anchor_t": 135.977908,
+          "anchor_x": 158.0505,
+          "anchor_y": -40.7875,
+          "anchor_yaw": -0.039692
+        },
+        {
+          "outage_id": "gap_04",
+          "outage_start_t": 183.239513,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778396754.26,
+          "anchor_t": 183.237908,
+          "anchor_x": 169.7223,
+          "anchor_y": -21.0728,
+          "anchor_yaw": -3.068633
+        },
+        {
+          "outage_id": "gap_05",
+          "outage_start_t": 230.49914,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778396801.52,
+          "anchor_t": 230.497908,
+          "anchor_x": 150.1265,
+          "anchor_y": -0.5677,
+          "anchor_yaw": 0.22492
+        },
+        {
+          "outage_id": "gap_06",
+          "outage_start_t": 277.758767,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778396848.78,
+          "anchor_t": 277.757908,
+          "anchor_x": 210.512,
+          "anchor_y": -5.3433,
+          "anchor_yaw": 1.162086
+        },
+        {
+          "outage_id": "gap_07",
+          "outage_start_t": 325.018394,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778396896.04,
+          "anchor_t": 325.017908,
+          "anchor_x": 154.5213,
+          "anchor_y": 12.9242,
+          "anchor_yaw": -3.046294
+        },
+        {
+          "outage_id": "gap_08",
+          "outage_start_t": 372.278021,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778396943.3,
+          "anchor_t": 372.277908,
+          "anchor_x": 89.4747,
+          "anchor_y": 4.9315,
+          "anchor_yaw": 2.351401
+        },
+        {
+          "outage_id": "gap_09",
+          "outage_start_t": 419.537648,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778396990.55,
+          "anchor_t": 419.527908,
+          "anchor_x": 27.5863,
+          "anchor_y": 14.5829,
+          "anchor_yaw": 3.006602
+        },
+        {
+          "outage_id": "gap_10",
+          "outage_start_t": 466.797275,
+          "outage_duration_sec": 10.0,
+          "anchor_stamp": 1778397037.81,
+          "anchor_t": 466.787908,
+          "anchor_x": 6.3734,
+          "anchor_y": -0.7236,
+          "anchor_yaw": -0.33575
+        }
+      ],
+      "method": {
+        "name": "gnss_ins_priority_with_simple_lio_outage_fallback",
+        "truth_definition": "The complete unmasked GNSS/INS trajectory is the ground-truth trajectory for all error metrics.",
+        "fusion_rule": "Fused pose equals GNSS/INS outside artificial outages and equals simple LIO fallback inside artificial outages.",
+        "fallback_rule": "Each outage starts a fresh simple LIO runtime initialized from the latest GNSS/INS pose before the outage; GNSS/INS truth is not injected during the outage.",
+        "lio_algorithm": "Reuses offline_simple_lio_eval.py scan filtering, IMU yaw prediction, local keyframe map, and SE(2) ICP parameters."
+      },
+      "config": {
+        "lidar_min_range_m": 2.0,
+        "lidar_max_range_m": 90.0,
+        "z_min_m": -0.5,
+        "z_max_m": 4.0,
+        "icp_z_weight": 0.7,
+        "scan_voxel_m": 0.35,
+        "map_voxel_m": 0.35,
+        "max_scan_points": 6500,
+        "max_keyframe_points": 4500,
+        "local_map_keyframes": 35,
+        "keyframe_dist_m": 0.45,
+        "keyframe_yaw_rad": 0.08,
+        "keyframe_time_sec": 1.2,
+        "icp_iterations": 10,
+        "icp_max_correspondence_m": 2.0,
+        "icp_trim_fraction": 0.82,
+        "icp_min_inliers": 80,
+        "icp_max_rmse_m": 1.5,
+        "icp_max_translation_step_m": 0.45,
+        "icp_max_yaw_step_rad": 0.08,
+        "icp_max_pose_correction_m": 0.55,
+        "icp_max_pose_correction_yaw_rad": 0.06,
+        "imu_gyro_scale": 0.04348764102608839,
+        "max_frame_dt_sec": 0.35,
+        "max_speed_mps": 4.0,
+        "max_yaw_rate_radps": 1.0,
+        "sparse_scan_points": 1200,
+        "sparse_icp_weight": 0.25,
+        "velocity_update_alpha": 0.45,
+        "sparse_velocity_update_alpha": 0.05
+      },
+      "runtime_sec": 224.246
+    }
+  }
+}
