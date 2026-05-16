@@ -1,5 +1,11 @@
 # RacingBrain 定位评估结果
 
+本仓库中的测试数据集与外参基于同济 DIAN Racing 车队 2025 年赛车。该车在 2025 年中国大学生电动方程式大赛中获得全国亚军，并将在同济 DIAN Driverless 车队改造后，参加 2026 年中国大学生无人驾驶方程式大赛。
+
+## 采数据过程
+
+![采数据过程](results/previews/data_collection.gif)
+
 这个仓库保留了 3 个可交互 HTML 结果。GitHub 的 README 会过滤 `iframe`，因此这里使用 GitHub 可点击预览链接嵌入入口；如果在线预览加载较慢，可以 clone 仓库后直接用浏览器打开对应 HTML。
 
 | 项目 | HTML 预览 | 仓库内文件 |
