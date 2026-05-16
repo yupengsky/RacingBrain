@@ -10,6 +10,8 @@ OUTPUT_DIR="${OUTPUT_DIR:-${WORKSPACE_DIR}/results/${RUN_NAME}}"
 OUTPUT_HTML="${OUTPUT_HTML:-${WORKSPACE_DIR}/results/${RUN_NAME}.html}"
 OUTAGES="${OUTAGES:-45:8,185:10,360:8}"
 SCENARIO_MODE="${SCENARIO_MODE:-severity_grid}"
+GAP_COUNT="${GAP_COUNT:-}"
+GAP_DURATION_SEC="${GAP_DURATION_SEC:-}"
 DURATION_SEC="${DURATION_SEC:-0}"
 START_SEC="${START_SEC:-0}"
 MAX_CLOUDS="${MAX_CLOUDS:-0}"
@@ -27,11 +29,30 @@ set -u
 
 mkdir -p "${OUTPUT_DIR}" "$(dirname "${OUTPUT_HTML}")"
 
+if [[ -n "${GAP_COUNT}" && -z "${GAP_DURATION_SEC}" ]]; then
+  echo "GAP_COUNT and GAP_DURATION_SEC must be provided together." >&2
+  exit 2
+fi
+if [[ -z "${GAP_COUNT}" && -n "${GAP_DURATION_SEC}" ]]; then
+  echo "GAP_COUNT and GAP_DURATION_SEC must be provided together." >&2
+  exit 2
+fi
+
+EXTRA_ARGS=()
+if [[ -n "${GAP_COUNT}" && -n "${GAP_DURATION_SEC}" ]]; then
+  EXTRA_ARGS+=(--gap-count "${GAP_COUNT}" --gap-duration-sec "${GAP_DURATION_SEC}")
+fi
+
 echo "Dataset: ${DATASET_DIR}"
 echo "Output dir: ${OUTPUT_DIR}"
 echo "Output HTML: ${OUTPUT_HTML}"
 echo "Scenario mode: ${SCENARIO_MODE}"
 echo "Custom outages: ${OUTAGES}"
+if [[ -n "${GAP_COUNT}" && -n "${GAP_DURATION_SEC}" ]]; then
+  echo "Gap group: ${GAP_COUNT} x ${GAP_DURATION_SEC}s"
+else
+  echo "Gap group: default 6 groups"
+fi
 echo "Duration sec: ${DURATION_SEC}"
 echo "Cloud stride: ${CLOUD_STRIDE}"
 echo "IMU gyro scale: ${IMU_GYRO_SCALE}"
@@ -47,6 +68,7 @@ python3 "${WORKSPACE_DIR}/scripts/offline_fuse_eval.py" \
   --max-clouds "${MAX_CLOUDS}" \
   --cloud-stride "${CLOUD_STRIDE}" \
   --imu-gyro-scale "${IMU_GYRO_SCALE}" \
+  "${EXTRA_ARGS[@]}" \
   "$@"
 
 echo "Open result:"

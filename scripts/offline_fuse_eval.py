@@ -200,6 +200,25 @@ def build_scenario_specs(args: argparse.Namespace, total_duration_sec: float) ->
             )
         ]
 
+    if (args.gap_count is None) != (args.gap_duration_sec is None):
+        raise ValueError("--gap-count and --gap-duration-sec must be provided together.")
+
+    if args.gap_count is not None and args.gap_duration_sec is not None:
+        count = int(args.gap_count)
+        duration = float(args.gap_duration_sec)
+        if count <= 0 or duration <= 0.0:
+            raise ValueError("--gap-count and --gap-duration-sec must both be positive.")
+        specs = make_even_outage_specs(count, duration, total_duration_sec)
+        return [
+            ScenarioSpec(
+                scenario_id=f"{count}_gaps_{duration:g}s".replace(".", "p"),
+                label=f"{count} gap{'s' if count != 1 else ''} x {duration:g}s",
+                outage_count=count,
+                segment_duration_sec=duration,
+                outage_specs=specs,
+            )
+        ]
+
     scenarios: List[ScenarioSpec] = []
     for count in SEVERITY_COUNTS:
         for duration in SEVERITY_DURATIONS_SEC:
@@ -1252,6 +1271,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gnss-topic", default="/gongji_gnss_ins_64")
     parser.add_argument("--scenario-mode", choices=("severity_grid", "single"), default="severity_grid")
     parser.add_argument("--outages", default=DEFAULT_OUTAGES, help="Comma-separated start:duration specs in seconds, relative to first processed cloud. Example: 45:8,185:10,gap_turn@360:8")
+    parser.add_argument("--gap-count", type=int, default=None, help="Run one generated scenario with this many GNSS/INS gaps.")
+    parser.add_argument("--gap-duration-sec", type=float, default=None, help="Run one generated scenario with this gap duration in seconds.")
     parser.add_argument("--start-sec", type=float, default=0.0)
     parser.add_argument("--duration-sec", type=float, default=0.0, help="0 means full available duration.")
     parser.add_argument("--max-clouds", type=int, default=0, help="0 means no cloud-count limit.")
